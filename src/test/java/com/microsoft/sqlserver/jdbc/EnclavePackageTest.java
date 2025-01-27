@@ -203,7 +203,7 @@ public class EnclavePackageTest extends AbstractTest {
      */
     public static void setAEConnectionString(String url, String protocol) throws Exception {
         connectionStringEnclave = TestUtils.addOrOverrideProperty(connectionString, "columnEncryptionSetting",
-                ColumnEncryptionSetting.Enabled.toString());
+                ColumnEncryptionSetting.ENABLED.toString());
 
         connectionStringEnclave = TestUtils.addOrOverrideProperty(connectionStringEnclave, "enclaveAttestationUrl",
                 (null != url) ? url : "http://blah");
@@ -230,7 +230,7 @@ public class EnclavePackageTest extends AbstractTest {
         AbstractTest.updateDataSource(cString, dsPool);
 
         try (Connection con1 = dsLocal.getConnection(); Connection con2 = dsXA.getConnection();
-                Connection con3 = dsPool.getConnection(); Connection con4 = PrepUtil.getConnection(cString)) {
+                Connection con3 = dsPool.getConnection()) {
             if (TestUtils.isAEv2(con1)) {
                 verifyEnclaveEnabled(con1, protocol);
             }
@@ -239,9 +239,6 @@ public class EnclavePackageTest extends AbstractTest {
             }
             if (TestUtils.isAEv2(con3)) {
                 verifyEnclaveEnabled(con3, protocol);
-            }
-            if (TestUtils.isAEv2(con4)) {
-                verifyEnclaveEnabled(con4, protocol);
             }
         }
     }
@@ -257,7 +254,7 @@ public class EnclavePackageTest extends AbstractTest {
 
         // enclaveAttestationUrl and enclaveAttestationProtocol without "columnEncryptionSetting"
         testInvalidProperties(TestUtils.addOrOverrideProperty(connectionStringEnclave, "columnEncryptionSetting",
-                ColumnEncryptionSetting.Disabled.toString()), "R_enclavePropertiesError");
+                ColumnEncryptionSetting.DISABLED.toString()), "R_enclavePropertiesError");
 
         // enclaveAttestationUrl without enclaveAttestationProtocol
         testInvalidProperties(TestUtils.removeProperty(connectionStringEnclave, "enclaveAttestationProtocol"),

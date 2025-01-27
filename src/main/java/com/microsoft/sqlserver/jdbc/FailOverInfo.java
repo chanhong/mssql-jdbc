@@ -31,7 +31,7 @@ final class FailoverInfo {
         return useFailoverPartner;
     }
 
-    FailoverInfo(String failover, SQLServerConnection con, boolean actualFailoverPartner) {
+    FailoverInfo(String failover, boolean actualFailoverPartner) {
         failoverPartner = failover;
         useFailoverPartner = actualFailoverPartner;
         portNumber = -1; // init to -1 to make sure that the user of this class calls the failover check before getting
@@ -99,8 +99,8 @@ final class FailoverInfo {
         try {
             if (useFailoverPartner != actualUseFailoverPartner) {
                 if (connection.getConnectionLogger().isLoggable(Level.FINE))
-                    connection.getConnectionLogger()
-                            .fine(connection.toString() + " Failover detected. failover partner=" + actualFailoverPartner);
+                    connection.getConnectionLogger().fine(
+                            connection.toString() + " Failover detected. failover partner=" + actualFailoverPartner);
                 useFailoverPartner = actualUseFailoverPartner;
             }
             // The checking for actualUseFailoverPartner may look weird but this is required

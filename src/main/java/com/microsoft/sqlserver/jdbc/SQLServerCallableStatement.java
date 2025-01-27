@@ -49,6 +49,9 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
      */
     private static final long serialVersionUID = 5044984771674532350L;
 
+    private static final String GET_TIMESTAMP = "getTimestamp";
+    private static final String SQLSTATE_07009 = "07009";
+
     /** the call param names */
     private HashMap<String, Integer> parameterNames;
 
@@ -65,18 +68,13 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
     private int outParamIndex = -1;
 
     /** The last out param accessed. */
-    private Parameter lastParamAccessed;
+    private transient Parameter lastParamAccessed;
 
     /** Currently active Stream Note only one stream can be active at a time */
-    private Closeable activeStream;
-
-    // Internal function used in tracing
-    String getClassNameInternal() {
-        return "SQLServerCallableStatement";
-    }
+    private transient Closeable activeStream;
 
     /** map */
-    Map<String, Integer> map = new ConcurrentHashMap<>();
+    private Map<String, Integer> map = new ConcurrentHashMap<>();
 
     /** atomic integer */
     AtomicInteger ai = new AtomicInteger(0);
@@ -170,17 +168,20 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         processResults();
 
         // if this item has been indexed already leave!
-        if (inOutParam[i - 1] == lastParamAccessed || inOutParam[i - 1].isValueGotten())
+        if (inOutParam[i - 1] == lastParamAccessed || inOutParam[i - 1].isValueGotten()) {
             return inOutParam[i - 1];
+        }
 
         // Skip OUT parameters (buffering them as we go) until we
         // reach the one we're looking for.
-        while (outParamIndex != i - 1)
+        while (outParamIndex != i - 1) {
             skipOutParameters(1, false);
+        }
 
         return inOutParam[i - 1];
     }
 
+    @Override
     void startResults() {
         super.startResults();
         outParamIndex = -1;
@@ -189,6 +190,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         assert null == activeStream;
     }
 
+    @Override
     void processBatch() throws SQLServerException {
         processResults();
 
@@ -219,7 +221,6 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
             // the response stream.
             for (int index = 0; index < inOutParam.length; ++index) {
                 if (index != outParamIndex && inOutParam[index].isValueGotten()) {
-                    assert inOutParam[index].isOutput();
                     inOutParam[index].resetOutputValue();
                 }
             }
@@ -251,11 +252,15 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
                 super("ExecDoneHandler");
             }
 
+            @Override
             boolean onDone(TDSReader tdsReader) throws SQLServerException {
                 // Consume the done token and decide what to do with it...
                 StreamDone doneToken = new StreamDone();
                 doneToken.setFromTDS(tdsReader);
-                connection.getSessionRecovery().decrementUnprocessedResponseCount();
+
+                if (doneToken.isFinal()) {
+                    connection.getSessionRecovery().decrementUnprocessedResponseCount();
+                }
 
                 // If this is a non-final batch-terminating DONE token,
                 // then stop parsing the response now and set up for
@@ -294,6 +299,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
                 foundParam = false;
             }
 
+            @Override
             boolean onRetValue(TDSReader tdsReader) throws SQLServerException {
                 srv.setFromTDS(tdsReader);
                 foundParam = true;
@@ -349,8 +355,10 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
             // of sp_[cursor][prep]exec params.
             outParamIndex -= outParamIndexAdjustment;
             if ((outParamIndex < 0 || outParamIndex >= inOutParam.length) || (!inOutParam[outParamIndex].isOutput())) {
-                getStatementLogger().info(toString() + " Unexpected outParamIndex: " + outParamIndex + "; adjustment: "
-                        + outParamIndexAdjustment);
+                if (getStatementLogger().isLoggable(java.util.logging.Level.INFO)) {
+                    getStatementLogger().info(toString() + " Unexpected outParamIndex: " + outParamIndex
+                            + "; adjustment: " + outParamIndexAdjustment);
+                }
                 connection.throwInvalidTDS();
             }
 
@@ -409,7 +417,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         if (index < 1 || index > inOutParam.length) {
             MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_invalidOutputParameter"));
             Object[] msgArgs = {index};
-            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), "07009", false);
+            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), SQLSTATE_07009, false);
         }
 
         // Check index refers to a registered OUT parameter
@@ -417,13 +425,13 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
             MessageFormat form = new MessageFormat(
                     SQLServerException.getErrString("R_outputParameterNotRegisteredForOutput"));
             Object[] msgArgs = {index};
-            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), "07009", true);
+            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), SQLSTATE_07009, true);
         }
 
         // If we haven't executed the statement yet then throw a nice friendly exception.
         if (!wasExecuted())
             SQLServerException.makeFromDriverError(connection, this,
-                    SQLServerException.getErrString("R_statementMustBeExecuted"), "07009", false);
+                    SQLServerException.getErrString("R_statementMustBeExecuted"), SQLSTATE_07009, false);
 
         resultsReader().getCommand().checkForInterrupt();
 
@@ -529,7 +537,10 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         return value;
     }
 
-    @Deprecated
+    /**
+     * @deprecated
+     */
+    @Deprecated(since = "6.5.4")
     @Override
     public BigDecimal getBigDecimal(int parameterIndex, int scale) throws SQLException {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
@@ -542,7 +553,10 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         return value;
     }
 
-    @Deprecated
+    /**
+     * @deprecated
+     */
+    @Deprecated(since = "6.5.4")
     @Override
     public BigDecimal getBigDecimal(String parameterName, int scale) throws SQLServerException {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
@@ -833,7 +847,6 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
 
     @Override
     public short getShort(int index) throws SQLServerException {
-
         loggerExternal.entering(getClassNameLogging(), "getShort", index);
         checkClosed();
         Short value = (Short) getValue(index, JDBCType.SMALLINT);
@@ -892,39 +905,39 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
     @Override
     public Timestamp getTimestamp(int index) throws SQLServerException {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
-            loggerExternal.entering(getClassNameLogging(), "getTimestamp", index);
+            loggerExternal.entering(getClassNameLogging(), GET_TIMESTAMP, index);
         checkClosed();
         java.sql.Timestamp value = (java.sql.Timestamp) getValue(index, JDBCType.TIMESTAMP);
-        loggerExternal.exiting(getClassNameLogging(), "getTimestamp", value);
+        loggerExternal.exiting(getClassNameLogging(), GET_TIMESTAMP, value);
         return value;
     }
 
     @Override
     public Timestamp getTimestamp(String parameterName) throws SQLServerException {
-        loggerExternal.entering(getClassNameLogging(), "getTimestamp", parameterName);
+        loggerExternal.entering(getClassNameLogging(), GET_TIMESTAMP, parameterName);
         checkClosed();
         java.sql.Timestamp value = (java.sql.Timestamp) getValue(findColumn(parameterName), JDBCType.TIMESTAMP);
-        loggerExternal.exiting(getClassNameLogging(), "getTimestamp", value);
+        loggerExternal.exiting(getClassNameLogging(), GET_TIMESTAMP, value);
         return value;
     }
 
     @Override
     public Timestamp getTimestamp(int index, Calendar cal) throws SQLServerException {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
-            loggerExternal.entering(getClassNameLogging(), "getTimestamp", new Object[] {index, cal});
+            loggerExternal.entering(getClassNameLogging(), GET_TIMESTAMP, new Object[] {index, cal});
         checkClosed();
         java.sql.Timestamp value = (java.sql.Timestamp) getValue(index, JDBCType.TIMESTAMP, cal);
-        loggerExternal.exiting(getClassNameLogging(), "getTimestamp", value);
+        loggerExternal.exiting(getClassNameLogging(), GET_TIMESTAMP, value);
         return value;
     }
 
     @Override
     public Timestamp getTimestamp(String name, Calendar cal) throws SQLServerException {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
-            loggerExternal.entering(getClassNameLogging(), "getTimestamp", new Object[] {name, cal});
+            loggerExternal.entering(getClassNameLogging(), GET_TIMESTAMP, new Object[] {name, cal});
         checkClosed();
         java.sql.Timestamp value = (java.sql.Timestamp) getValue(findColumn(name), JDBCType.TIMESTAMP, cal);
-        loggerExternal.exiting(getClassNameLogging(), "getTimestamp", value);
+        loggerExternal.exiting(getClassNameLogging(), GET_TIMESTAMP, value);
         return value;
     }
 
@@ -1313,6 +1326,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
                     metaQuery.append(threePartName.getDatabasePart());
                     metaQuery.append(", ");
                 }
+
                 if (null != threePartName.getOwnerPart()) {
                     metaQuery.append("@procedure_owner=");
                     metaQuery.append(threePartName.getOwnerPart());
@@ -1329,7 +1343,8 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
                     MessageFormat form = new MessageFormat(
                             SQLServerException.getErrString("R_parameterNotDefinedForProcedure"));
                     Object[] msgArgs = {columnName, ""};
-                    SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), "07009", false);
+                    SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), SQLSTATE_07009,
+                            false);
                 }
 
                 try (ResultSet rs = s.executeQueryInternal(metaQuery.toString())) {
@@ -1348,10 +1363,10 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
 
         }
 
-        // @RETURN_VALUE will always be in the parameterNames map, so parameterNamesSize will always be at least of size 1.
-        // If the server didn't return anything (eg. the param names for the sproc), user might not have access.
-        // So, parameterNamesSize must be of size 1.
-        if (null != parameterNames && parameterNames.size() == 1) {
+        // If the server didn't return anything (eg. the param names for the sp_sproc_columns), user might not
+        // have required permissions to view all the parameterNames. And, there's also the case depending on the permissions,
+        // @RETURN_VALUE may or may not be present. So, the parameterNames list might have an additional +1 parameter.
+        if (null != parameterNames && parameterNames.size() <= 1) {
             return map.computeIfAbsent(columnName, ifAbsent -> ai.incrementAndGet());
         }
 
@@ -1373,7 +1388,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
             MessageFormat form = new MessageFormat(
                     SQLServerException.getErrString("R_parameterNotDefinedForProcedure"));
             Object[] msgArgs = {columnName, procedureName};
-            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), "07009", false);
+            SQLServerException.makeFromDriverError(connection, this, form.format(msgArgs), SQLSTATE_07009, false);
         }
 
         // @RETURN_VALUE is always in the list. If the user uses return value ?=call(@p1) syntax then
@@ -1619,7 +1634,6 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
         // scale - for java.sql.Types.DECIMAL or java.sql.Types.NUMERIC types,
         // this is the number of digits after the decimal point.
         // For all other types, this value will be ignored.
-
         setObject(setterGetParam(findColumn(parameterName)), value, JavaType.of(value), JDBCType.of(sqlType),
                 (java.sql.Types.NUMERIC == sqlType || java.sql.Types.DECIMAL == sqlType) ? decimals : null, null,
                 forceEncrypt, findColumn(parameterName), null);
@@ -1872,6 +1886,7 @@ public class SQLServerCallableStatement extends SQLServerPreparedStatement imple
             loggerExternal.entering(getClassNameLogging(), "setSmallDateTime",
                     new Object[] {parameterName, value, forceEncrypt});
         checkClosed();
+
         setValue(findColumn(parameterName), JDBCType.SMALLDATETIME, value, JavaType.TIMESTAMP, forceEncrypt);
         loggerExternal.exiting(getClassNameLogging(), "setSmallDateTime");
     }

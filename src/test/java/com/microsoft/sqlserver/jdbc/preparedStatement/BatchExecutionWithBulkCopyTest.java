@@ -22,6 +22,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Random;
 import java.util.UUID;
 
 import org.junit.jupiter.api.AfterAll;
@@ -59,6 +60,7 @@ public class BatchExecutionWithBulkCopyTest extends AbstractTest {
     static String squareBracketTableName = RandomUtil.getIdentifier("BulkCopy]]]]test'");
     static String doubleQuoteTableName = RandomUtil.getIdentifier("\"BulkCopy\"\"\"\"test\"");
     static String schemaTableName = "\"dbo\"         . /*some comment */     " + squareBracketTableName;
+    static String tableNameBulkComputedCols = RandomUtil.getIdentifier("BulkCopyComputedCols");
 
     private Object[] generateExpectedValues() {
         float randomFloat = RandomData.generateReal(false);
@@ -333,6 +335,7 @@ public class BatchExecutionWithBulkCopyTest extends AbstractTest {
     }
 
     @Test
+    @Tag((Constants.xAzureSQLDW))
     public void testNullGuid() throws Exception {
         String valid = "insert into " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (c24) values (?)";
         try (Connection connection = PrepUtil.getConnection(connectionString + ";useBulkCopyForBatchInsert=true;");
@@ -341,13 +344,14 @@ public class BatchExecutionWithBulkCopyTest extends AbstractTest {
             pstmt.setNull(1, microsoft.sql.Types.GUID);
             pstmt.addBatch();
             pstmt.executeBatch();
-            
-            try (ResultSet rs = stmt.executeQuery("select c24 from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+
+            try (ResultSet rs = stmt
+                    .executeQuery("select c24 from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
                 Object[] expected = new Object[1];
-                
+
                 expected[0] = null;
                 rs.next();
-                
+
                 assertEquals(expected[0], rs.getObject(1));
             }
         }
@@ -717,6 +721,113 @@ public class BatchExecutionWithBulkCopyTest extends AbstractTest {
                 assertEquals(g2.toString(), Geography.STGeomFromWKB((byte[]) rs.getObject(2)).toString());
                 assertEquals(myTimestamp, rs.getObject(3));
                 assertEquals(myTimestamp, rs.getObject(4));
+            }
+        }
+    }
+
+    @Test
+    public void testReverseColumnOrder() throws Exception {
+        String valid = "insert into " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (c2, c1) values " + "("
+                + "?, " + "? " + ")";
+
+        try (Connection connection = PrepUtil.getConnection(connectionString + ";useBulkCopyForBatchInsert=true;");
+                SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(valid);
+                Statement stmt = connection.createStatement()) {
+            Field f1 = SQLServerConnection.class.getDeclaredField("isAzureDW");
+            f1.setAccessible(true);
+            f1.set(connection, true);
+
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            String createTable = "create table " + AbstractSQLGenerator.escapeIdentifier(tableName)
+                    + " (c1 varchar(1), c2 varchar(3))";
+            stmt.execute(createTable);
+
+            pstmt.setString(1, "One");
+            pstmt.setString(2, "1");
+            pstmt.addBatch();
+
+            pstmt.executeBatch();
+
+            try (ResultSet rs = stmt
+                    .executeQuery("select c1, c2 from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+
+                Object[] expected = new Object[2];
+
+                expected[0] = "1";
+                expected[1] = "One";
+                rs.next();
+
+                for (int i = 0; i < expected.length; i++) {
+                    assertEquals(expected[i], rs.getObject(i + 1));
+                }
+            }
+        }
+    }
+
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xSQLv11)
+    @Tag(Constants.xSQLv12)
+    public void testComputedCols() throws Exception {
+        String valid = "insert into " + AbstractSQLGenerator.escapeIdentifier(tableNameBulkComputedCols) + " (id, json)"
+                + " values (?, ?)";
+
+        try (Connection connection = PrepUtil.getConnection(connectionString + ";useBulkCopyForBatchInsert=true;");
+                SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(valid);
+                Statement stmt = (SQLServerStatement) connection.createStatement();) {
+            Field f1 = SQLServerConnection.class.getDeclaredField("isAzureDW");
+            f1.setAccessible(true);
+            f1.set(connection, true);
+
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableNameBulkComputedCols), stmt);
+            String createTable = "create table " + AbstractSQLGenerator.escapeIdentifier(tableNameBulkComputedCols)
+                    + " (id nvarchar(100) not null, json nvarchar(max) not null,"
+                    + " vcol1 as json_value([json], '$.vcol1'), vcol2 as json_value([json], '$.vcol2'))";
+            stmt.execute(createTable);
+
+            String jsonValue = "{\"vcol1\":\"" + UUID.randomUUID().toString() + "\",\"vcol2\":\""
+                    + UUID.randomUUID().toString() + "\" }";
+            String idValue = UUID.randomUUID().toString();
+            pstmt.setString(1, idValue);
+            pstmt.setString(2, jsonValue);
+            pstmt.addBatch();
+            pstmt.executeBatch();
+
+            try (ResultSet rs = stmt.executeQuery(
+                    "select * from " + AbstractSQLGenerator.escapeIdentifier(tableNameBulkComputedCols))) {
+                rs.next();
+
+                assertEquals(idValue, rs.getObject(1));
+                assertEquals(jsonValue, rs.getObject(2));
+            }
+        }
+    }
+
+    /**
+     * Test bulk insert with no space after table name
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testNoSpaceInsert() throws Exception {
+        // table name with valid alphanumeric chars that don't need to be escaped, since escaping the table name would not test the space issue
+        String testNoSpaceInsertTableName = "testNoSpaceInsertTable" + (new Random()).nextInt(Integer.MAX_VALUE);
+        String valid = "insert into " + testNoSpaceInsertTableName + "(col)" + " values(?)";
+
+        try (Connection connection = PrepUtil.getConnection(connectionString + ";useBulkCopyForBatchInsert=true;");
+                SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) connection.prepareStatement(valid);
+                Statement stmt = (SQLServerStatement) connection.createStatement();) {
+
+            TestUtils.dropTableIfExists(testNoSpaceInsertTableName, stmt);
+            String createTable = "create table " + testNoSpaceInsertTableName + " (col varchar(4))";
+            stmt.execute(createTable);
+
+            pstmt.setString(1, "test");
+            pstmt.addBatch();
+            pstmt.executeBatch();
+        } finally {
+            try (Statement stmt = connection.createStatement()) {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(testNoSpaceInsertTableName), stmt);
             }
         }
     }

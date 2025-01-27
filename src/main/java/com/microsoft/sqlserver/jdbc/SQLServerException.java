@@ -7,6 +7,7 @@ package com.microsoft.sqlserver.jdbc;
 
 import java.sql.SQLFeatureNotSupportedException;
 import java.text.MessageFormat;
+import java.util.List;
 import java.util.UUID;
 import java.util.logging.Level;
 
@@ -17,7 +18,8 @@ enum SQLState {
     DATA_EXCEPTION_DATETIME_FIELD_OVERFLOW("22008"),
     NUMERIC_DATA_OUT_OF_RANGE("22003"),
     DATA_EXCEPTION_LENGTH_MISMATCH("22026"),
-    COL_NOT_FOUND("42S22");
+    COL_NOT_FOUND("42S22"),
+    ERROR_IN_ASSIGNMENT("22005");
 
     private final String sqlStateCode;
 
@@ -59,14 +61,17 @@ public final class SQLServerException extends java.sql.SQLException {
     static final String EXCEPTION_XOPEN_CONNECTION_CANT_ESTABLISH = "08001";
     static final String EXCEPTION_XOPEN_CONNECTION_DOES_NOT_EXIST = "08003";
     static final String EXCEPTION_XOPEN_CONNECTION_FAILURE = "08006"; // After connection was connected OK
+    static final String EXCEPTION_XOPEN_ERROR_IN_ASSIGNMENT = "22005"; // Error code is the same in both SQL-99 and X/Open
+
     static final String LOG_CLIENT_CONNECTION_ID_PREFIX = " ClientConnectionId:";
 
     // SQL error values (from sqlerrorcodes.h)
     static final int LOGON_FAILED = 18456;
     static final int PASSWORD_EXPIRED = 18488;
     static final int USER_ACCOUNT_LOCKED = 18486;
-    static java.util.logging.Logger exLogger = java.util.logging.Logger
-            .getLogger("com.microsoft.sqlserver.jdbc.internals.SQLServerException");
+
+    // Built-in function '%.*ls' in impersonation context is not supported in this version of SQL Server.
+    static final int IMPERSONATION_CONTEXT_NOT_SUPPORTED = 40529;
 
     // Facility for driver-specific error codes
     static final int DRIVER_ERROR_NONE = 0;
@@ -82,6 +87,9 @@ public final class SQLServerException extends java.sql.SQLException {
     static final int DATA_CLASSIFICATION_NOT_EXPECTED = 11;
     static final int DATA_CLASSIFICATION_INVALID_LABEL_INDEX = 12;
     static final int DATA_CLASSIFICATION_INVALID_INFORMATION_TYPE_INDEX = 13;
+
+    static final java.util.logging.Logger exLogger = java.util.logging.Logger
+            .getLogger("com.microsoft.sqlserver.jdbc.internals.SQLServerException");
 
     /** driver error code */
     private int driverErrorCode = DRIVER_ERROR_NONE;
@@ -114,22 +122,21 @@ public final class SQLServerException extends java.sql.SQLException {
 
         if (exLogger.isLoggable(Level.FINE))
             exLogger.fine("*** SQLException:" + id + " " + this.toString() + " " + errText);
-        if (bStack) {
-            if (exLogger.isLoggable(Level.FINE)) {
-                StringBuilder sb = new StringBuilder(100);
-                StackTraceElement st[] = this.getStackTrace();
-                for (StackTraceElement aSt : st)
-                    sb.append(aSt.toString());
-                Throwable t = this.getCause();
-                if (t != null) {
-                    sb.append("\n caused by ").append(t).append("\n");
-                    StackTraceElement tst[] = t.getStackTrace();
-                    for (StackTraceElement aTst : tst)
-                        sb.append(aTst.toString());
-                }
-                exLogger.fine(sb.toString());
+        if (bStack && exLogger.isLoggable(Level.FINE)) {
+            StringBuilder sb = new StringBuilder(100);
+            StackTraceElement[] st = this.getStackTrace();
+            for (StackTraceElement aSt : st)
+                sb.append(aSt.toString());
+            Throwable t = this.getCause();
+            if (t != null) {
+                sb.append("\n caused by ").append(t).append("\n");
+                StackTraceElement[] tst = t.getStackTrace();
+                for (StackTraceElement aTst : tst)
+                    sb.append(aTst.toString());
             }
+            exLogger.fine(sb.toString());
         }
+
         if (SQLServerException.getErrString("R_queryTimedOut").equals(errText)) {
             this.setDriverErrorCode(SQLServerException.ERROR_QUERY_TIMEOUT);
         }
@@ -159,27 +166,31 @@ public final class SQLServerException extends java.sql.SQLException {
         super(errText, errState, errNum);
         initCause(cause);
         logException(null, errText, true);
-        if (Util.isActivityTraceOn()) {
-            // set the activityid flag so that we don't send the current ActivityId later.
-            ActivityCorrelator.setCurrentActivityIdSentFlag();
-        }
     }
 
     SQLServerException(String errText, Throwable cause) {
         super(errText);
         initCause(cause);
         logException(null, errText, true);
-        if (Util.isActivityTraceOn()) {
-            ActivityCorrelator.setCurrentActivityIdSentFlag();
-        }
     }
 
     SQLServerException(Object obj, String errText, String errState, int errNum, boolean bStack) {
         super(errText, errState, errNum);
         logException(obj, errText, bStack);
-        if (Util.isActivityTraceOn()) {
-            ActivityCorrelator.setCurrentActivityIdSentFlag();
-        }
+    }
+
+    /**
+     * Constructs a new SQLServerException from SQL Server error
+     * 
+     * @param sqlServerError
+     *        SQL Server error
+     */
+    public SQLServerException(SQLServerError sqlServerError) {
+        super(sqlServerError.getErrorMessage(),
+                generateStateCode(null, sqlServerError.getErrorNumber(), sqlServerError.getErrorState()),
+                sqlServerError.getErrorNumber(), null);
+
+        this.sqlServerError = sqlServerError;
     }
 
     /**
@@ -265,6 +276,21 @@ public final class SQLServerException extends java.sql.SQLException {
                 SQLServerException.checkAndAppendClientConnId(errText, con), state, sqlServerError, bStack);
         theException.setDriverErrorCode(DRIVER_ERROR_FROM_DATABASE);
 
+        // Add any extra messages to the SQLException error chain
+        List<SQLServerError> errorChain = sqlServerError.getErrorChain();
+        if (errorChain != null) {
+            for (SQLServerError srvError : errorChain) {
+                String state2 = generateStateCode(con, srvError.getErrorNumber(), srvError.getErrorState());
+
+                SQLServerException chainException = new SQLServerException(obj,
+                        SQLServerException.checkAndAppendClientConnId(srvError.getErrorMessage(), con), state2,
+                        srvError, bStack);
+                chainException.setDriverErrorCode(DRIVER_ERROR_FROM_DATABASE);
+
+                theException.setNextException(chainException);
+            }
+        }
+
         // Close the connection if we get a severity 20 or higher error class (nClass is severity of error).
         if ((sqlServerError.getErrorSeverity() >= 20) && (null != con)) {
             con.notifyPooledConnection(theException);
@@ -275,7 +301,7 @@ public final class SQLServerException extends java.sql.SQLException {
     }
 
     // This code is same as the conversion logic that previously existed in connecthelper.
-    static void ConvertConnectExceptionToSQLServerException(String hostName, int portNumber, SQLServerConnection conn,
+    static void convertConnectExceptionToSQLServerException(String hostName, int portNumber, SQLServerConnection conn,
             Exception ex) throws SQLServerException {
         Exception connectException = ex;
         // Throw the exception if exception was caught by code above (stored in connectException).
@@ -312,6 +338,8 @@ public final class SQLServerException extends java.sql.SQLException {
                     return "08S01";
                 case SQLServerException.EXCEPTION_XOPEN_CONNECTION_FAILURE:
                     return "08S01";
+                case SQLServerException.EXCEPTION_XOPEN_ERROR_IN_ASSIGNMENT:
+                    return "22005";
                 default:
                     return "";
             }
@@ -338,9 +366,9 @@ public final class SQLServerException extends java.sql.SQLException {
         if (xopenStates) {
             switch (errNum) {
                 case 4060:
-                    return "08001"; // Database name undefined at logging
+                    return EXCEPTION_XOPEN_CONNECTION_CANT_ESTABLISH; // Database name undefined at logging
                 case 18456:
-                    return "08001"; // username password wrong at login
+                    return EXCEPTION_XOPEN_CONNECTION_CANT_ESTABLISH; // username password wrong at login
                 case 2714:
                     return "42S01"; // Table already exists
                 case 208:
@@ -353,13 +381,13 @@ public final class SQLServerException extends java.sql.SQLException {
             // The error code came from the db but XOPEN does not have a specific case for it.
         } else {
             switch (errNum) {
-                // case 18456: return "08001"; //username password wrong at login
+                // case 18456: return EXCEPTION_XOPEN_CONNECTION_CANT_ESTABLISH; //username password wrong at login
                 case 8152:
                     return "22001"; // String data right truncation
                 case 515: // 2.2705
                 case 547:
-                    return "23000"; // Integrity constraint violation
                 case 2601:
+                case 2627:
                     return "23000"; // Integrity constraint violation
                 case 2714:
                     return "S0001"; // table already exists
@@ -367,8 +395,6 @@ public final class SQLServerException extends java.sql.SQLException {
                     return "S0002"; // table not found
                 case 1205:
                     return "40001"; // deadlock detected
-                case 2627:
-                    return "23000"; // DPM 4.04. Primary key violation
                 default: {
                     String dbState = databaseState.toString();
                     /*
@@ -396,19 +422,20 @@ public final class SQLServerException extends java.sql.SQLException {
      * @return error string concatenated by ClientConnectionId(in string format) if applicable, otherwise, return
      *         original error string.
      */
-    static String checkAndAppendClientConnId(String errMsg, SQLServerConnection conn) throws SQLServerException {
-        if (null != conn && conn.attachConnId()) {
+    static String checkAndAppendClientConnId(String errMsg, SQLServerConnection conn) {
+        if (null != conn && conn.isConnected()) {
             UUID clientConnId = conn.getClientConIdInternal();
-            assert null != clientConnId;
-            StringBuilder sb = new StringBuilder(errMsg);
-            // This syntax of adding connection id is matched in a retry logic. If anything changes here, make
-            // necessary changes to enableSSL() function's exception handling mechanism.
-            sb.append(LOG_CLIENT_CONNECTION_ID_PREFIX);
-            sb.append(clientConnId.toString());
-            return sb.toString();
-        } else {
-            return errMsg;
+            if (null != clientConnId) {
+                StringBuilder sb = (errMsg != null) ? new StringBuilder(errMsg) : new StringBuilder();
+                // This syntax of adding connection id is matched in a retry logic. If anything changes here, make
+                // necessary changes to enableSSL() function's exception handling mechanism.
+                sb.append(LOG_CLIENT_CONNECTION_ID_PREFIX);
+                sb.append(clientConnId.toString());
+                return sb.toString();
+            }
         }
+        return (errMsg != null) ? errMsg : "";
+
     }
 
     static void throwNotSupportedException(SQLServerConnection con, Object obj) throws SQLServerException {

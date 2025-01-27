@@ -5,11 +5,13 @@
 package com.microsoft.sqlserver.jdbc;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.management.ManagementFactory;
 import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -31,6 +33,7 @@ import java.util.logging.Logger;
 import javax.sql.ConnectionEvent;
 import javax.sql.PooledConnection;
 
+import org.junit.Assume;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,7 @@ import org.junit.runner.RunWith;
 
 import com.microsoft.aad.msal4j.TokenCache;
 import com.microsoft.aad.msal4j.TokenCacheAccessContext;
+import com.microsoft.sqlserver.jdbc.SQLServerConnection.SqlFedAuthInfo;
 import com.microsoft.sqlserver.testframework.AbstractSQLGenerator;
 import com.microsoft.sqlserver.testframework.AbstractTest;
 import com.microsoft.sqlserver.testframework.Constants;
@@ -47,9 +51,11 @@ import com.microsoft.sqlserver.testframework.PrepUtil;
 
 @RunWith(JUnitPlatform.class)
 public class SQLServerConnectionTest extends AbstractTest {
+	
     // If no retry is done, the function should at least exit in 5 seconds
     static int threshHoldForNoRetryInMilliseconds = 5000;
     static int loginTimeOutInSeconds = 10;
+    static String tnirHost = getConfiguredProperty("tnirHost");
 
     String randomServer = RandomUtil.getIdentifier("Server");
 
@@ -135,6 +141,9 @@ public class SQLServerConnectionTest extends AbstractTest {
         ds.setJAASConfigurationName(stringPropValue);
         assertEquals(stringPropValue, ds.getJAASConfigurationName(), TestResource.getResource("R_valuesAreDifferent"));
 
+        ds.setUseDefaultJaasConfig(booleanPropValue);
+        assertEquals(booleanPropValue, ds.getUseDefaultJaasConfig(), TestResource.getResource("R_valuesAreDifferent"));
+
         ds.setMSIClientId(stringPropValue);
         assertEquals(stringPropValue, ds.getMSIClientId(), TestResource.getResource("R_valuesAreDifferent"));
 
@@ -168,32 +177,45 @@ public class SQLServerConnectionTest extends AbstractTest {
         assertEquals(stringPropValue, ds.getTrustStorePassword(), TestResource.getResource("R_valuesAreDifferent"));
 
         // verify encrypt=true options
-        ds.setEncrypt(EncryptOption.Mandatory.toString());
+        ds.setEncrypt(EncryptOption.MANDATORY.toString());
         assertEquals("True", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
-        ds.setEncrypt(EncryptOption.True.toString());
+        ds.setEncrypt(EncryptOption.TRUE.toString());
         assertEquals("True", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
 
         // verify encrypt=false options
-        ds.setEncrypt(EncryptOption.Optional.toString());
+        ds.setEncrypt(EncryptOption.OPTIONAL.toString());
         assertEquals("False", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
-        ds.setEncrypt(EncryptOption.False.toString());
+        ds.setEncrypt(EncryptOption.FALSE.toString());
         assertEquals("False", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
-        ds.setEncrypt(EncryptOption.No.toString());
+        ds.setEncrypt(EncryptOption.NO.toString());
         assertEquals("False", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
 
         // verify enrypt=strict options
-        ds.setEncrypt(EncryptOption.Strict.toString());
+        ds.setEncrypt(EncryptOption.STRICT.toString());
         assertEquals("Strict", EncryptOption.valueOfString(ds.getEncrypt()).toString(),
                 TestResource.getResource("R_valuesAreDifferent"));
 
         ds.setEncrypt(booleanPropValue);
         assertEquals(Boolean.toString(booleanPropValue), ds.getEncrypt(),
                 TestResource.getResource("R_valuesAreDifferent"));
+
+        ds.setUseDefaultGSSCredential(booleanPropValue);
+        assertEquals(booleanPropValue, ds.getUseDefaultGSSCredential(),
+                TestResource.getResource("R_valuesAreDifferent"));
+
+        ds.setCalcBigDecimalPrecision(booleanPropValue);
+        assertEquals(booleanPropValue, ds.getCalcBigDecimalPrecision(),
+                TestResource.getResource("R_valuesAreDifferent"));
+        ds.setRetryExec(stringPropValue);
+        assertEquals(stringPropValue, ds.getRetryExec(), TestResource.getResource("R_valuesAreDifferent"));
+
+        ds.setRetryConn(stringPropValue);
+        assertEquals(stringPropValue, ds.getRetryConn(), TestResource.getResource("R_valuesAreDifferent"));
 
         ds.setServerCertificate(stringPropValue);
         assertEquals(stringPropValue, ds.getServerCertificate(), TestResource.getResource("R_valuesAreDifferent"));
@@ -221,6 +243,9 @@ public class SQLServerConnectionTest extends AbstractTest {
 
         ds.setSendTimeAsDatetime(booleanPropValue);
         assertEquals(booleanPropValue, ds.getSendTimeAsDatetime(), TestResource.getResource("R_valuesAreDifferent"));
+
+        ds.setDatetimeParameterType("datetime2");
+        assertEquals("datetime2", ds.getDatetimeParameterType(), TestResource.getResource("R_valuesAreDifferent"));
 
         ds.setUseFmtOnly(booleanPropValue);
         assertEquals(booleanPropValue, ds.getUseFmtOnly(), TestResource.getResource("R_valuesAreDifferent"));
@@ -327,6 +352,22 @@ public class SQLServerConnectionTest extends AbstractTest {
         try (Connection con = ds.getConnection()) {}
     }
 
+    @Tag(Constants.xSQLv11)
+    @Tag(Constants.xSQLv12)
+    @Tag(Constants.xSQLv14)
+    @Tag(Constants.xSQLv15)
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    @Test
+    public void testEncryptedStrictConnection() throws SQLException {
+        SQLServerDataSource ds = new SQLServerDataSource();
+        ds.setURL(connectionString);
+        ds.setServerCertificate(serverCertificate);
+        ds.setEncrypt(Constants.STRICT);
+
+        try (Connection con = ds.getConnection()) {}
+    }
+
     @Test
     public void testJdbcDataSourceMethod() throws SQLFeatureNotSupportedException {
         SQLServerDataSource fxds = new SQLServerDataSource();
@@ -417,6 +458,101 @@ public class SQLServerConnectionTest extends AbstractTest {
             // make sure that connection is closed.
             if (null != pooledConnection)
                 pooledConnection.close();
+        }
+    }
+
+    /**
+     * Runs the `testConnectCountInLoginAndCorrectRetryCount` test several times with different values of
+     * connectRetryCount.
+     */
+    @Test
+    public void testConnectCountInLoginAndCorrectRetryCountForMultipleValues() {
+        testConnectCountInLoginAndCorrectRetryCount(0);
+        testConnectCountInLoginAndCorrectRetryCount(1);
+        testConnectCountInLoginAndCorrectRetryCount(2);
+    }
+
+    /**
+     * Tests whether connectRetryCount and connectRetryInterval are properly respected in the login loop. As well, tests
+     * that connection is retried the proper number of times.
+     */
+    private void testConnectCountInLoginAndCorrectRetryCount(int connectRetryCount) {
+        long timerStart = 0;
+
+        int connectRetryInterval = 60;
+        int longLoginTimeout = loginTimeOutInSeconds * 9; // 90 seconds
+
+        try {
+            SQLServerDataSource ds = new SQLServerDataSource();
+            ds.setURL(connectionString);
+            ds.setLoginTimeout(longLoginTimeout);
+            ds.setConnectRetryCount(connectRetryCount);
+            ds.setConnectRetryInterval(connectRetryInterval);
+            ds.setDatabaseName(RandomUtil.getIdentifier("DataBase"));
+            timerStart = System.currentTimeMillis();
+
+            try (Connection con = ds.getConnection()) {
+                assertTrue(con == null, TestResource.getResource("R_shouldNotConnect"));
+            }
+        } catch (Exception e) {
+            assertTrue(
+                    e.getMessage().contains(TestResource.getResource("R_cannotOpenDatabase"))
+                            || (TestUtils.getProperty(connectionString, "msiClientId") != null && (e.getMessage()
+                                    .toLowerCase().contains(TestResource.getResource("R_loginFailedMI").toLowerCase())
+                                    || e.getMessage().toLowerCase()
+                                            .contains(TestResource.getResource("R_MInotAvailable").toLowerCase()))),
+                    e.getMessage());
+            long totalTime = System.currentTimeMillis() - timerStart;
+
+            // Maximum is unknown, but is needs to be less than longLoginTimeout or else this is an issue.
+            assertTrue(totalTime < (longLoginTimeout * 1000L), TestResource.getResource("R_executionTooLong"));
+
+            // We should at least take as long as the retry interval between all retries past the first.
+            // Of the above acceptable errors (R_cannotOpenDatabase, R_loginFailedMI, R_MInotAvailable), only
+            // R_cannotOpenDatabase is transient, and can be used to measure multiple retries with retry interval. The
+            // others will exit before they have a chance to wait, and min will be too low.
+            if (e.getMessage().contains(TestResource.getResource("R_cannotOpenDatabase"))) {
+                int minTimeInSecs = connectRetryInterval * (connectRetryCount - 1);
+                assertTrue(totalTime > (minTimeInSecs * 1000L), TestResource.getResource("R_executionNotLong"));
+            }
+        }
+    }
+
+    // Test connect retry 0 but should still connect to TNIR
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    @Tag(Constants.reqExternalSetup)
+    public void testConnectTnir() {
+        org.junit.Assume.assumeTrue(isWindows);
+
+        // no retries but should connect to TNIR (this assumes host is defined in host file
+        try (Connection con = PrepUtil
+                .getConnection(connectionString + ";transparentNetworkIPResolution=true;connectRetryCount=0;serverName="
+                        + tnirHost);) {} catch (Exception e) {
+            fail(e.getMessage());
+        }
+    }
+
+    // Test connect retry 0 and TNIR disabled
+    @Test
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.xAzureSQLDB)
+    @Tag(Constants.reqExternalSetup)
+    public void testConnectNoTnir() {
+        org.junit.Assume.assumeTrue(isWindows);
+
+        // no retries no TNIR should fail even tho host is defined in host file
+        try (Connection con = PrepUtil.getConnection(connectionString
+                + ";transparentNetworkIPResolution=false;connectRetryCount=0;serverName=" + tnirHost);) {
+            assertTrue(con == null, TestResource.getResource("R_shouldNotConnect"));
+        } catch (Exception e) {
+            assertTrue(e.getMessage().matches(TestUtils.formatErrorMsg("R_tcpipConnectionFailed"))
+                    || ((isSqlAzure() || isSqlAzureDW())
+                                                         ? e.getMessage().contains(
+                                                                 TestResource.getResource("R_connectTimedOut"))
+                                                         : false),
+                    e.getMessage());
         }
     }
 
@@ -687,13 +823,22 @@ public class SQLServerConnectionTest extends AbstractTest {
                 assertTrue(timeDiff <= milsecs, form.format(msgArgs));
             }
         } catch (Exception e) {
-            assertTrue(e.getMessage().contains(TestResource.getResource("R_cannotOpenDatabase")), e.getMessage());
+            assertTrue(
+                    e.getMessage().contains(TestResource.getResource("R_cannotOpenDatabase"))
+                                || (TestUtils.getProperty(connectionString, "msiClientId") != null
+                                    && e.getMessage().toLowerCase()
+                                        .contains(TestResource.getResource("R_loginFailedMI").toLowerCase())),
+                    e.getMessage());
             timerEnd = System.currentTimeMillis();
         }
     }
 
     @Test
     public void testIncorrectUserName() throws SQLException {
+        String auth = TestUtils.getProperty(connectionString, "authentication");
+        org.junit.Assume.assumeTrue(auth != null
+                && (auth.equalsIgnoreCase("SqlPassword") || auth.equalsIgnoreCase("ActiveDirectoryPassword")));
+
         long timerStart = 0;
         long timerEnd = 0;
         final long milsecs = threshHoldForNoRetryInMilliseconds;
@@ -711,13 +856,22 @@ public class SQLServerConnectionTest extends AbstractTest {
                 assertTrue(timeDiff <= milsecs, form.format(msgArgs));
             }
         } catch (Exception e) {
-            assertTrue(e.getMessage().contains(TestResource.getResource("R_loginFailed")));
+            assertTrue(
+                    e.getMessage().contains(TestResource.getResource("R_loginFailed"))
+                                || (TestUtils.getProperty(connectionString, "msiClientId") != null
+                                    && e.getMessage().toLowerCase()
+                                        .contains(TestResource.getResource("R_loginFailedMI").toLowerCase())),
+                    e.getMessage());
             timerEnd = System.currentTimeMillis();
         }
     }
 
     @Test
     public void testIncorrectPassword() throws SQLException {
+        String auth = TestUtils.getProperty(connectionString, "authentication");
+        org.junit.Assume.assumeTrue(auth != null
+                && (auth.equalsIgnoreCase("SqlPassword") || auth.equalsIgnoreCase("ActiveDirectoryPassword")));
+
         long timerStart = 0;
         long timerEnd = 0;
         final long milsecs = threshHoldForNoRetryInMilliseconds;
@@ -735,7 +889,12 @@ public class SQLServerConnectionTest extends AbstractTest {
                 assertTrue(timeDiff <= milsecs, form.format(msgArgs));
             }
         } catch (Exception e) {
-            assertTrue(e.getMessage().contains(TestResource.getResource("R_loginFailed")));
+            assertTrue(
+                    e.getMessage().contains(TestResource.getResource("R_loginFailed"))
+                            || (TestUtils.getProperty(connectionString, "msiClientId") != null
+                                && e.getMessage().toLowerCase()
+                                    .contains(TestResource.getResource("R_loginFailedMI").toLowerCase())),
+                    e.getMessage());
             timerEnd = System.currentTimeMillis();
         }
     }
@@ -825,6 +984,79 @@ public class SQLServerConnectionTest extends AbstractTest {
         }
     }
 
+    @Test
+    public void testSetDatetimeParameterTypeShouldAcceptDatetime() throws SQLException {
+        String expected = "datetime";
+        String actual = "";
+
+        try (SQLServerConnection conn = getConnection()) {
+            conn.setDatetimeParameterType("datetime");
+            actual = conn.getDatetimeParameterType();
+        }
+
+        assertEquals(expected, actual, TestResource.getResource("R_valuesAreDifferent"));
+    }
+
+    @Test
+    public void testSetDatetimeParameterTypeShouldAcceptDatetime2() throws SQLException {
+        String expected = "datetime2";
+        String actual = "";
+
+        try (SQLServerConnection conn = getConnection()) {
+            conn.setDatetimeParameterType("datetime2");
+            actual = conn.getDatetimeParameterType();
+        }
+
+        assertEquals(expected, actual, TestResource.getResource("R_valuesAreDifferent"));
+    }
+
+    @Test
+    public void testSetDatetimeParameterTypeShouldAcceptDatetimeoffset() throws SQLException {
+        String expected = "datetimeoffset";
+        String actual = "";
+
+        try (SQLServerConnection conn = getConnection()) {
+            conn.setDatetimeParameterType("datetimeoffset");
+            actual = conn.getDatetimeParameterType();
+        }
+
+        assertEquals(expected, actual, TestResource.getResource("R_valuesAreDifferent"));
+    }
+
+    @Test
+    public void testSetDatetimeParameterTypeThrowExceptionWhenBadValue() throws SQLException {
+        try (SQLServerConnection conn = getConnection()) {
+            assertThrows(SQLException.class, () -> {
+                conn.setDatetimeParameterType("some_invalid_value");
+            });
+        }
+    }
+
+    @Test
+    public void testGetDatetimeParameterTypeShouldReturnDatetime2AsDefault() throws SQLException {
+        String expected = "datetime2";
+        String actual = "";
+
+        try (SQLServerConnection conn = getConnection()) {
+            actual = conn.getDatetimeParameterType();
+        }
+
+        assertEquals(expected, actual, TestResource.getResource("R_valuesAreDifferent"));
+    }
+
+    @Test
+    public void testGetDatetimeParameterTypeShouldConvertDatetimeParameterTypeToLowercase() throws SQLException {
+        String expected = "datetime2";
+        String actual = "";
+
+        try (SQLServerConnection conn = getConnection()) {
+            conn.setDatetimeParameterType("DATETIME2");
+            actual = conn.getDatetimeParameterType();
+        }
+
+        assertEquals(expected, actual, TestResource.getResource("R_valuesAreDifferent"));
+    }
+
     /**
      * Test thread's interrupt status is not cleared.
      *
@@ -839,7 +1071,9 @@ public class SQLServerConnectionTest extends AbstractTest {
 
                 ds.setURL(connectionString);
                 ds.setServerName("invalidServerName" + UUID.randomUUID());
-                ds.setLoginTimeout(5);
+                ds.setLoginTimeout(30);
+                ds.setConnectRetryCount(6);
+                ds.setConnectRetryInterval(20);
                 try (Connection con = ds.getConnection()) {} catch (SQLException e) {}
             }
         };
@@ -855,6 +1089,63 @@ public class SQLServerConnectionTest extends AbstractTest {
         executor.shutdownNow();
 
         assertTrue(status && future.isCancelled(), TestResource.getResource("R_threadInterruptNotSet"));
+    }
+
+    /**
+     * Test thread count when finding socket using threading.
+     */
+    @Test
+    @Tag(Constants.xAzureSQLDB)
+    @Tag(Constants.xAzureSQLDW)
+    public void testThreadCountWhenFindingSocket() {
+        ExecutorService executor = null;
+        ManagementFactory.getThreadMXBean().resetPeakThreadCount();
+
+        // First, check to see if there is a reachable local host, or else test will fail.
+        try {
+            SQLServerDataSource ds = new SQLServerDataSource();
+            ds.setServerName("localhost");
+            Connection con = ds.getConnection();
+        } catch (SQLServerException e) {
+            // Assume this will be an error different than 'localhost is unreachable'. If it is 'localhost is
+            // unreachable' abort and skip the test.
+            Assume.assumeFalse(e.getMessage().startsWith(TestResource.getResource("R_tcpipConnectionToHost")));
+        }
+
+        try {
+            executor = Executors.newSingleThreadExecutor(r -> new Thread(r, ""));
+            executor.submit(() -> {
+                try {
+                    SQLServerDataSource ds = new SQLServerDataSource();
+                    ds.setServerName("localhost");
+                    Thread.sleep(5000);
+                    Connection conn2 = ds.getConnection();
+                } catch (Exception e) {
+                    if (!(e instanceof SQLServerException)) {
+                        fail(TestResource.getResource("R_unexpectedException") + e.getMessage());
+                    }
+                }
+            });
+            SQLServerDataSource ds = new SQLServerDataSource();
+            ds.setServerName("localhost");
+            Connection conn = ds.getConnection();
+            Thread.sleep(5000);
+        } catch (Exception e) {
+            if (!(e instanceof SQLServerException)) {
+                fail(TestResource.getResource("R_unexpectedException") + e.getMessage());
+            }
+        } finally {
+            if (executor != null) {
+                executor.shutdown();
+            }
+        }
+
+        // At this point, thread count has returned to normal. If the peak was more
+        // than 2 times the current, this is an issue and the test should fail.
+        if (ManagementFactory.getThreadMXBean().getPeakThreadCount() > 2
+                * ManagementFactory.getThreadMXBean().getThreadCount()) {
+            fail(TestResource.getResource("R_unexpectedThreadCount"));
+        }
     }
 
     /**
@@ -958,8 +1249,9 @@ public class SQLServerConnectionTest extends AbstractTest {
         } catch (SQLException e) {
             // TODO: servers which do not support TDS 8 will return SSL failed error, test should be updated once server
             // available
-            assertTrue(e.getMessage().matches(TestUtils.formatErrorMsg("R_serverCertError"))
-                    || e.getMessage().matches(TestUtils.formatErrorMsg("R_sslFailed")), e.getMessage());
+            String errMsg = e.getMessage().replaceAll("\\r", "").replaceAll("\\n", "");
+            assertTrue(errMsg.matches(TestUtils.formatErrorMsg("R_serverCertError"))
+                    || errMsg.matches(TestUtils.formatErrorMsg("R_sslFailed")), e.getMessage());
         }
 
         // test connection string
@@ -969,8 +1261,9 @@ public class SQLServerConnectionTest extends AbstractTest {
         } catch (SQLException e) {
             // TODO: servers which do not support TDS 8 will return SSL failed error, test should be updated once server
             // available
-            assertTrue(e.getMessage().matches(TestUtils.formatErrorMsg("R_serverCertError"))
-                    || e.getMessage().matches(TestUtils.formatErrorMsg("R_sslFailed")), e.getMessage());
+            String errMsg = e.getMessage().replaceAll("\\r", "").replaceAll("\\n", "");
+            assertTrue(errMsg.matches(TestUtils.formatErrorMsg("R_serverCertError"))
+                    || errMsg.matches(TestUtils.formatErrorMsg("R_sslFailed")), e.getMessage());
         }
     }
 
@@ -1030,4 +1323,51 @@ public class SQLServerConnectionTest extends AbstractTest {
             assertTrue(e.getMessage().matches(TestUtils.formatErrorMsg("R_errorServerName")));
         }
     }
+    
+
+    @Test
+    public void testGetSqlFedAuthTokenFailure() throws SQLException {
+        try (Connection conn = getConnection()){
+        	SqlFedAuthInfo fedAuthInfo = ((SQLServerConnection) conn).new SqlFedAuthInfo();
+        	fedAuthInfo.spn = "https://database.windows.net/";
+        	fedAuthInfo.stsurl = "https://login.windows.net/xxx";
+        	SqlAuthenticationToken fedAuthToken = SQLServerMSAL4JUtils.getSqlFedAuthToken(fedAuthInfo, "xxx",
+                    "xxx",SqlAuthentication.ACTIVE_DIRECTORY_PASSWORD.toString(), 10);
+        	fail(TestResource.getResource("R_expectedExceptionNotThrown"));
+        } catch (SQLServerException e) {
+        	//test pass
+            assertTrue(e.getMessage().contains(SQLServerException.getErrString("R_connectionTimedOut")), "Expected Timeout Exception was not thrown");
+        }        
+    }
+
+    @Test
+    public void testGetSqlFedAuthTokenFailureNoWaiting() throws SQLException {
+        try (Connection conn = getConnection()){
+        	SqlFedAuthInfo fedAuthInfo = ((SQLServerConnection) conn).new SqlFedAuthInfo();
+        	fedAuthInfo.spn = "https://database.windows.net/";
+        	fedAuthInfo.stsurl = "https://login.windows.net/xxx";
+        	SqlAuthenticationToken fedAuthToken = SQLServerMSAL4JUtils.getSqlFedAuthToken(fedAuthInfo, "xxx",
+                    "xxx",SqlAuthentication.ACTIVE_DIRECTORY_PASSWORD.toString(), 0);
+        	fail(TestResource.getResource("R_expectedExceptionNotThrown"));
+        } catch (SQLServerException e) {
+        	//test pass
+            assertTrue(e.getMessage().contains(SQLServerException.getErrString("R_connectionTimedOut")), "Expected Timeout Exception was not thrown");
+        }        
+    }
+
+    @Test
+    public void testGetSqlFedAuthTokenFailureNagativeWaiting() throws SQLException {
+        try (Connection conn = getConnection()){
+        	SqlFedAuthInfo fedAuthInfo = ((SQLServerConnection) conn).new SqlFedAuthInfo();
+        	fedAuthInfo.spn = "https://database.windows.net/";
+        	fedAuthInfo.stsurl = "https://login.windows.net/xxx";
+        	SqlAuthenticationToken fedAuthToken = SQLServerMSAL4JUtils.getSqlFedAuthToken(fedAuthInfo, "xxx",
+                    "xxx",SqlAuthentication.ACTIVE_DIRECTORY_PASSWORD.toString(), -1);
+        	fail(TestResource.getResource("R_expectedExceptionNotThrown"));
+        } catch (SQLServerException e) {
+        	//test pass
+            assertTrue(e.getMessage().contains(SQLServerException.getErrString("R_connectionTimedOut")), "Expected Timeout Exception was not thrown");
+        }        
+    }
+
 }

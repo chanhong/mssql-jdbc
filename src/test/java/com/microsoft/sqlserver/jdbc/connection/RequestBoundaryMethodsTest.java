@@ -8,6 +8,7 @@ package com.microsoft.sqlserver.jdbc.connection;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -72,8 +73,16 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         boolean enablePrepareOnFirstPreparedStatementCall1 = false;
         String sCatalog1 = "master";
         boolean useBulkCopyForBatchInsert1 = true;
+        int bulkCopyForBatchInsertBatchSize1 = 1000;
+        boolean bulkCopyForBatchInsertCheckConstraints1 = true;
+        boolean bulkCopyForBatchInsertFireTriggers1 = true;
+        boolean bulkCopyForBatchInsertKeepIdentity1 = true;
+        boolean bulkCopyForBatchInsertKeepNulls1 = true;
+        boolean bulkCopyForBatchInsertTableLock1 = true;
+        boolean bulkCopyForBatchInsertAllowEncryptedValueModifications1 = true;
         boolean useFmtOnly1 = true;
         boolean delayLoadingLobs1 = false;
+        boolean ignoreOffsetOnDateTimeOffsetConversion1 = true;
 
         boolean autoCommitMode2 = false;
         int transactionIsolationLevel2 = SQLServerConnection.TRANSACTION_SERIALIZABLE;
@@ -86,66 +95,98 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         boolean enablePrepareOnFirstPreparedStatementCall2 = true;
         String sCatalog2 = RandomUtil.getIdentifier("RequestBoundaryDatabase");
         boolean useBulkCopyForBatchInsert2 = false;
+        int bulkCopyForBatchInsertBatchSize2 = 0;
+        boolean bulkCopyForBatchInsertCheckConstraints2 = false;
+        boolean bulkCopyForBatchInsertFireTriggers2 = false;
+        boolean bulkCopyForBatchInsertKeepIdentity2 = false;
+        boolean bulkCopyForBatchInsertKeepNulls2 = false;
+        boolean bulkCopyForBatchInsertTableLock2 = false;
+        boolean bulkCopyForBatchInsertAllowEncryptedValueModifications2 = false;
         boolean useFmtOnly2 = false;
         boolean delayLoadingLobs2 = true;
+        boolean ignoreOffsetOnDateTimeOffsetConversion2 = false;
 
         try (SQLServerConnection con = getConnection(); Statement stmt = con.createStatement()) {
-            if (TestUtils.isJDBC43OrGreater(con)) {
-                // Second database
-                stmt.executeUpdate("CREATE DATABASE [" + sCatalog2 + "]");
+            assumeTrue(TestUtils.isJDBC43OrGreater(con));
+            // Second database
+            stmt.executeUpdate("CREATE DATABASE [" + sCatalog2 + "]");
 
-                // First set of values.
-                setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
-                        sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
-                        serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
-                        useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1);
-                con.beginRequest();
-                // Call setters with the second set of values inside beginRequest()/endRequest() block.
-                setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
-                        sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
-                        serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
-                        useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2);
-                con.endRequest();
-                // Test if endRequest() resets the SQLServerConnection properties back to the first set of values.
-                compareValuesAgainstConnection(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1,
-                        holdability1, sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
-                        serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
-                        useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1);
+            // First set of values.
+            setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
+                    sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
+                    serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
+                    useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1, ignoreOffsetOnDateTimeOffsetConversion1,
+                    bulkCopyForBatchInsertBatchSize1, bulkCopyForBatchInsertCheckConstraints1,
+                    bulkCopyForBatchInsertFireTriggers1, bulkCopyForBatchInsertKeepIdentity1, bulkCopyForBatchInsertKeepNulls1,
+                    bulkCopyForBatchInsertTableLock1,bulkCopyForBatchInsertAllowEncryptedValueModifications1);
+            con.beginRequest();
+            // Call setters with the second set of values inside beginRequest()/endRequest() block.
+            setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
+                    sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
+                    serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
+                    useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2, ignoreOffsetOnDateTimeOffsetConversion2,
+                    bulkCopyForBatchInsertBatchSize2, bulkCopyForBatchInsertCheckConstraints2,
+                    bulkCopyForBatchInsertFireTriggers2, bulkCopyForBatchInsertKeepIdentity2, bulkCopyForBatchInsertKeepNulls2,
+                    bulkCopyForBatchInsertTableLock2, bulkCopyForBatchInsertAllowEncryptedValueModifications2);
+            con.endRequest();
+            // Test if endRequest() resets the SQLServerConnection properties back to the first set of values.
+            compareValuesAgainstConnection(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1,
+                    holdability1, sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
+                    serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
+                    useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1, ignoreOffsetOnDateTimeOffsetConversion1,
+                    bulkCopyForBatchInsertBatchSize1, bulkCopyForBatchInsertCheckConstraints1,
+                    bulkCopyForBatchInsertFireTriggers1, bulkCopyForBatchInsertKeepIdentity1, bulkCopyForBatchInsertKeepNulls1,
+                    bulkCopyForBatchInsertTableLock1, bulkCopyForBatchInsertAllowEncryptedValueModifications1);
+            // Multiple calls to beginRequest() without an intervening call to endRequest() are no-op.
+            setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
+                    sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
+                    serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
+                    useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2, ignoreOffsetOnDateTimeOffsetConversion2,
+                    bulkCopyForBatchInsertBatchSize2, bulkCopyForBatchInsertCheckConstraints2,
+                    bulkCopyForBatchInsertFireTriggers2, bulkCopyForBatchInsertKeepIdentity2, bulkCopyForBatchInsertKeepNulls2,
+                    bulkCopyForBatchInsertTableLock2, bulkCopyForBatchInsertAllowEncryptedValueModifications2);            
+            con.beginRequest();
+            setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
+                    sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
+                    serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
+                    useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1, ignoreOffsetOnDateTimeOffsetConversion1,
+                    bulkCopyForBatchInsertBatchSize1, bulkCopyForBatchInsertCheckConstraints1,
+                    bulkCopyForBatchInsertFireTriggers1, bulkCopyForBatchInsertKeepIdentity1, bulkCopyForBatchInsertKeepNulls1,
+                    bulkCopyForBatchInsertTableLock1, bulkCopyForBatchInsertAllowEncryptedValueModifications1);
+            con.beginRequest();
+            con.endRequest();
+            // Same values as before the first beginRequest()
+            compareValuesAgainstConnection(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2,
+                    holdability2, sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
+                    serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
+                    useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2, ignoreOffsetOnDateTimeOffsetConversion2,
+                    bulkCopyForBatchInsertBatchSize2, bulkCopyForBatchInsertCheckConstraints2,
+                    bulkCopyForBatchInsertFireTriggers2, bulkCopyForBatchInsertKeepIdentity2, bulkCopyForBatchInsertKeepNulls2,
+                    bulkCopyForBatchInsertTableLock2, bulkCopyForBatchInsertAllowEncryptedValueModifications2);            
+            // A call to endRequest() without an intervening call to beginRequest() is no-op.
+            setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
+                    sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
+                    serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
+                    useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1, ignoreOffsetOnDateTimeOffsetConversion1,
+                    bulkCopyForBatchInsertBatchSize1, bulkCopyForBatchInsertCheckConstraints1,
+                    bulkCopyForBatchInsertFireTriggers1, bulkCopyForBatchInsertKeepIdentity1, bulkCopyForBatchInsertKeepNulls1,
+                    bulkCopyForBatchInsertTableLock1, bulkCopyForBatchInsertAllowEncryptedValueModifications1);
 
-                // Multiple calls to beginRequest() without an intervening call to endRequest() are no-op.
-                setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
-                        sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
-                        serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
-                        useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2);
-                con.beginRequest();
-                setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
-                        sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
-                        serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
-                        useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1);
-                con.beginRequest();
-                con.endRequest();
-                // Same values as before the first beginRequest()
-                compareValuesAgainstConnection(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2,
-                        holdability2, sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
-                        serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
-                        useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2);
-
-                // A call to endRequest() without an intervening call to beginRequest() is no-op.
-                setConnectionFields(con, autoCommitMode1, transactionIsolationLevel1, networkTimeout1, holdability1,
-                        sendTimeAsDatetime1, statementPoolingCacheSize1, disableStatementPooling1,
-                        serverPreparedStatementDiscardThreshold1, enablePrepareOnFirstPreparedStatementCall1, sCatalog1,
-                        useBulkCopyForBatchInsert1, useFmtOnly1, delayLoadingLobs1);
-                setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
-                        sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
-                        serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
-                        useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2);
-                con.endRequest();
-                // No change.
-                compareValuesAgainstConnection(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2,
-                        holdability2, sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
-                        serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
-                        useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2);
-            }
+            setConnectionFields(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2, holdability2,
+                    sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
+                    serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
+                    useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2, ignoreOffsetOnDateTimeOffsetConversion2,
+                    bulkCopyForBatchInsertBatchSize2, bulkCopyForBatchInsertCheckConstraints2,
+                    bulkCopyForBatchInsertFireTriggers2, bulkCopyForBatchInsertKeepIdentity2, bulkCopyForBatchInsertKeepNulls2,
+                    bulkCopyForBatchInsertTableLock2, bulkCopyForBatchInsertAllowEncryptedValueModifications2);            con.endRequest();
+            // No change.
+            compareValuesAgainstConnection(con, autoCommitMode2, transactionIsolationLevel2, networkTimeout2,
+                    holdability2, sendTimeAsDatetime2, statementPoolingCacheSize2, disableStatementPooling2,
+                    serverPreparedStatementDiscardThreshold2, enablePrepareOnFirstPreparedStatementCall2, sCatalog2,
+                    useBulkCopyForBatchInsert2, useFmtOnly2, delayLoadingLobs2, ignoreOffsetOnDateTimeOffsetConversion2,
+                    bulkCopyForBatchInsertBatchSize2, bulkCopyForBatchInsertCheckConstraints2,
+                    bulkCopyForBatchInsertFireTriggers2, bulkCopyForBatchInsertKeepIdentity2, bulkCopyForBatchInsertKeepNulls2,
+                    bulkCopyForBatchInsertTableLock2, bulkCopyForBatchInsertAllowEncryptedValueModifications2);
         } finally {
             TestUtils.dropDatabaseIfExists(sCatalog2, connectionString);
         }
@@ -159,24 +200,23 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
     @Test
     public void testWarnings() throws SQLException {
         try (Connection con = getConnection()) {
-            if (TestUtils.isJDBC43OrGreater(con)) {
-                con.beginRequest();
-                generateWarning(con);
-                assertNotNull(con.getWarnings());
-                con.endRequest();
-                assertNull(con.getWarnings());
+            assumeTrue(TestUtils.isJDBC43OrGreater(con));
+            con.beginRequest();
+            generateWarning(con);
+            assertNotNull(con.getWarnings());
+            con.endRequest();
+            assertNull(con.getWarnings());
 
-                generateWarning(con);
-                con.endRequest();
-                assertNotNull(con.getWarnings());
+            generateWarning(con);
+            con.endRequest();
+            assertNotNull(con.getWarnings());
 
-                con.clearWarnings();
-                con.beginRequest();
-                generateWarning(con);
-                con.beginRequest();
-                con.endRequest();
-                assertNull(con.getWarnings());
-            }
+            con.clearWarnings();
+            con.beginRequest();
+            generateWarning(con);
+            con.beginRequest();
+            con.endRequest();
+            assertNull(con.getWarnings());
         }
     }
 
@@ -188,27 +228,24 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
     @Test
     public void testOpenTransactions() throws SQLException {
         try (Connection con = getConnection(); Statement stmt = con.createStatement()) {
-            if (TestUtils.isJDBC43OrGreater(con)) {
-                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
-                stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (col int)");
-                con.beginRequest();
-                con.setAutoCommit(false);
-                stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values(5)");
-                // endRequest() does a rollback here, the value does not get inserted into the table.
-                con.endRequest();
-                con.commit();
+            assumeTrue(TestUtils.isJDBC43OrGreater(con));
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (col int)");
+            con.beginRequest();
+            con.setAutoCommit(false);
+            stmt.executeUpdate("INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values(5)");
+            // endRequest() does a rollback here, the value does not get inserted into the table.
+            con.endRequest();
+            con.commit();
 
-                try (ResultSet rs = con.createStatement()
-                        .executeQuery("SELECT * from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
-                    assertTrue(!rs.isBeforeFirst(), "Should not have returned a result set.");
-                } finally {
-                    if (null != tableName) {
-                        TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
-                    }
+            try (ResultSet rs = con.createStatement()
+                    .executeQuery("SELECT * from " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+                assertTrue(!rs.isBeforeFirst(), "Should not have returned a result set.");
+            } finally {
+                if (null != tableName) {
+                    TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
                 }
             }
-        } catch (Exception e) {
-            fail(e.getMessage());
         }
     }
 
@@ -220,61 +257,58 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
     @Test
     public void testStatements() throws SQLException {
         try (Connection con = getConnection();) {
-            if (TestUtils.isJDBC43OrGreater(con)) {
-                try (Statement stmt1 = con.createStatement()) {
-                    con.beginRequest();
-                    try (Statement stmt = con.createStatement()) {
-                        try (ResultSet rs = stmt.executeQuery("SELECT 1")) {
-                            rs.next();
-                            assertEquals(1, rs.getInt(1));
-                            con.endRequest();
-
-                            assertTrue(!stmt1.isClosed(),
-                                    "Statement created outside of beginRequest()/endRequest() block should not be closed.");
-                            assertTrue(stmt.isClosed(),
-                                    "Statement created inside beginRequest()/endRequest() block should be closed after endRequest().");
-                            assertTrue(rs.isClosed(), "ResultSet should be closed after endRequest().");
-                        }
-                    }
-                }
-
-                // Multiple statements inside beginRequest()/endRequest() block
+            assumeTrue(TestUtils.isJDBC43OrGreater(con));
+            try (Statement stmt1 = con.createStatement()) {
                 con.beginRequest();
                 try (Statement stmt = con.createStatement()) {
-                    TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
-                    stmt.executeUpdate(
-                            "CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (col int)");
-                    try (PreparedStatement ps = con.prepareStatement(
-                            "INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values (?)")) {
-                        ps.setInt(1, 2);
-                        ps.executeUpdate();
+                    try (ResultSet rs = stmt.executeQuery("SELECT 1")) {
+                        rs.next();
+                        assertEquals(1, rs.getInt(1));
+                        con.endRequest();
 
-                        try (Statement stmt1 = con.createStatement(); ResultSet rs = stmt1
-                                .executeQuery("SELECT * FROM " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
-                            rs.next();
-                            assertEquals(2, rs.getInt(1));
-                            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
-
-                            try (CallableStatement cs = con.prepareCall("{call sp_server_info}")) {
-                                cs.execute();
-                                con.endRequest();
-
-                                assertTrue(stmt.isClosed());
-                                assertTrue(ps.isClosed());
-                                assertTrue(stmt1.isClosed());
-                                assertTrue(cs.isClosed());
-                                assertTrue(rs.isClosed());
-                            }
-                        }
+                        assertTrue(!stmt1.isClosed(),
+                                "Statement created outside of beginRequest()/endRequest() block should not be closed.");
+                        assertTrue(stmt.isClosed(),
+                                "Statement created inside beginRequest()/endRequest() block should be closed after endRequest().");
+                        assertTrue(rs.isClosed(), "ResultSet should be closed after endRequest().");
                     }
-                } finally {
-                    if (null != tableName) {
-                        try (Statement stmt = con.createStatement()) {
-                            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+                }
+            }
+
+            // Multiple statements inside beginRequest()/endRequest() block
+            con.beginRequest();
+            try (Statement stmt = con.createStatement()) {
+                TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+                stmt.executeUpdate("CREATE TABLE " + AbstractSQLGenerator.escapeIdentifier(tableName) + " (col int)");
+                try (PreparedStatement ps = con.prepareStatement(
+                        "INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName) + " values (?)")) {
+                    ps.setInt(1, 2);
+                    ps.executeUpdate();
+
+                    try (Statement stmt1 = con.createStatement(); ResultSet rs = stmt1
+                            .executeQuery("SELECT * FROM " + AbstractSQLGenerator.escapeIdentifier(tableName))) {
+                        rs.next();
+                        assertEquals(2, rs.getInt(1));
+                        TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+
+                        try (CallableStatement cs = con.prepareCall("{call sp_server_info}")) {
+                            cs.execute();
+                            con.endRequest();
+
+                            assertTrue(stmt.isClosed());
+                            assertTrue(ps.isClosed());
+                            assertTrue(stmt1.isClosed());
+                            assertTrue(cs.isClosed());
+                            assertTrue(rs.isClosed());
                         }
                     }
                 }
-
+            } finally {
+                if (null != tableName) {
+                    try (Statement stmt = con.createStatement()) {
+                        TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+                    }
+                }
             }
         }
     }
@@ -296,67 +330,66 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         final CountDownLatch latch = new CountDownLatch(3);
         try {
             sharedVariables.con = getConnection();
-            if (TestUtils.isJDBC43OrGreater(sharedVariables.con)) {
-                Thread thread1 = new Thread() {
-                    public void run() {
-                        try {
-                            sharedVariables.con.setNetworkTimeout(null, 100);
-                            sharedVariables.con.setHoldability(ResultSet.CLOSE_CURSORS_AT_COMMIT);
+            assumeTrue(TestUtils.isJDBC43OrGreater(sharedVariables.con));
+            Thread thread1 = new Thread() {
+                public void run() {
+                    try {
+                        sharedVariables.con.setNetworkTimeout(null, 100);
+                        sharedVariables.con.setHoldability(ResultSet.CLOSE_CURSORS_AT_COMMIT);
+                        latch.countDown();
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            };
+
+            Thread thread2 = new Thread() {
+                public void run() {
+                    try {
+                        sharedVariables.stmt = sharedVariables.con.createStatement();
+                        try (ResultSet rs = sharedVariables.stmt.executeQuery("SELECT 1")) {
+                            rs.next();
+                            assertEquals(1, rs.getInt(1));
                             latch.countDown();
-                        } catch (SQLException e) {
-                            e.printStackTrace();
-                            Thread.currentThread().interrupt();
                         }
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                        Thread.currentThread().interrupt();
                     }
-                };
+                }
+            };
 
-                Thread thread2 = new Thread() {
-                    public void run() {
-                        try {
-                            sharedVariables.stmt = sharedVariables.con.createStatement();
-                            try (ResultSet rs = sharedVariables.stmt.executeQuery("SELECT 1")) {
-                                rs.next();
-                                assertEquals(1, rs.getInt(1));
-                                latch.countDown();
-                            }
-                        } catch (SQLException e) {
-                            e.printStackTrace();
-                            Thread.currentThread().interrupt();
+            Thread thread3 = new Thread() {
+                public void run() {
+                    try {
+                        sharedVariables.pstmt = sharedVariables.con.prepareStatement("SELECT 1");
+                        try (ResultSet rs = sharedVariables.pstmt.executeQuery()) {
+                            rs.next();
+                            assertEquals(1, rs.getInt(1));
+                            latch.countDown();
                         }
+                    } catch (SQLException e) {
+                        e.printStackTrace();
+                        Thread.currentThread().interrupt();
                     }
-                };
 
-                Thread thread3 = new Thread() {
-                    public void run() {
-                        try {
-                            sharedVariables.pstmt = sharedVariables.con.prepareStatement("SELECT 1");
-                            try (ResultSet rs = sharedVariables.pstmt.executeQuery()) {
-                                rs.next();
-                                assertEquals(1, rs.getInt(1));
-                                latch.countDown();
-                            }
-                        } catch (SQLException e) {
-                            e.printStackTrace();
-                            Thread.currentThread().interrupt();
-                        }
+                }
+            };
 
-                    }
-                };
+            int originalNetworkTimeout = sharedVariables.con.getNetworkTimeout();
+            int originalHoldability = sharedVariables.con.getHoldability();
+            sharedVariables.con.beginRequest();
+            thread1.start();
+            thread2.start();
+            thread3.start();
+            latch.await();
+            sharedVariables.con.endRequest();
 
-                int originalNetworkTimeout = sharedVariables.con.getNetworkTimeout();
-                int originalHoldability = sharedVariables.con.getHoldability();
-                sharedVariables.con.beginRequest();
-                thread1.start();
-                thread2.start();
-                thread3.start();
-                latch.await();
-                sharedVariables.con.endRequest();
-
-                assertEquals(originalNetworkTimeout, sharedVariables.con.getNetworkTimeout());
-                assertEquals(originalHoldability, sharedVariables.con.getHoldability());
-                assertTrue(sharedVariables.stmt.isClosed());
-                assertTrue(sharedVariables.pstmt.isClosed());
-            }
+            assertEquals(originalNetworkTimeout, sharedVariables.con.getNetworkTimeout());
+            assertEquals(originalHoldability, sharedVariables.con.getHoldability());
+            assertTrue(sharedVariables.stmt.isClosed());
+            assertTrue(sharedVariables.pstmt.isClosed());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             fail(e.getMessage());
@@ -397,7 +430,12 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
             int networkTimeout, int holdability, boolean sendTimeAsDatetime, int statementPoolingCacheSize,
             boolean disableStatementPooling, int serverPreparedStatementDiscardThreshold,
             boolean enablePrepareOnFirstPreparedStatementCall, String sCatalog, boolean useBulkCopyForBatchInsert,
-            boolean useFmtOnly, boolean delayLoadingLobs) throws SQLException {
+            boolean useFmtOnly, boolean delayLoadingLobs, boolean ignoreOffsetOnDateTimeOffsetConversion,
+            int bulkCopyForBatchInsertBatchSize, boolean bulkCopyForBatchInsertCheckConstraints, 
+            boolean bulkCopyForBatchInsertFireTriggers, boolean bulkCopyForBatchInsertKeepIdentity, 
+            boolean bulkCopyForBatchInsertKeepNulls, boolean bulkCopyForBatchInsertTableLock, 
+            boolean bulkCopyForBatchInsertAllowEncryptedValueModifications) throws SQLException {
+        
         con.setAutoCommit(autoCommitMode);
         con.setTransactionIsolation(transactionIsolationLevel);
         con.setNetworkTimeout(null, networkTimeout);
@@ -411,35 +449,50 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         con.setUseBulkCopyForBatchInsert(useBulkCopyForBatchInsert);
         con.setUseFmtOnly(useFmtOnly);
         con.setDelayLoadingLobs(delayLoadingLobs);
+        con.setIgnoreOffsetOnDateTimeOffsetConversion(ignoreOffsetOnDateTimeOffsetConversion);
+        con.setBulkCopyForBatchInsertBatchSize(bulkCopyForBatchInsertBatchSize);
+        con.setBulkCopyForBatchInsertCheckConstraints(bulkCopyForBatchInsertCheckConstraints);
+        con.setBulkCopyForBatchInsertFireTriggers(bulkCopyForBatchInsertFireTriggers);
+        con.setBulkCopyForBatchInsertKeepIdentity(bulkCopyForBatchInsertKeepIdentity);
+        con.setBulkCopyForBatchInsertKeepNulls(bulkCopyForBatchInsertKeepNulls);
+        con.setBulkCopyForBatchInsertTableLock(bulkCopyForBatchInsertTableLock);
+        con.setBulkCopyForBatchInsertAllowEncryptedValueModifications(bulkCopyForBatchInsertAllowEncryptedValueModifications);
     }
-
+    
     private void compareValuesAgainstConnection(SQLServerConnection con, boolean autoCommitMode,
             int transactionIsolationLevel, int networkTimeout, int holdability, boolean sendTimeAsDatetime,
             int statementPoolingCacheSize, boolean disableStatementPooling, int serverPreparedStatementDiscardThreshold,
             boolean enablePrepareOnFirstPreparedStatementCall, String sCatalog, boolean useBulkCopyForBatchInsert,
-            boolean useFmtOnly, boolean delayLoadingLobs) throws SQLException {
+            boolean useFmtOnly, boolean delayLoadingLobs, boolean ignoreOffsetOnDateTimeOffsetConversion,
+            int bulkCopyForBatchInsertBatchSize, boolean bulkCopyForBatchInsertCheckConstraints, 
+            boolean bulkCopyForBatchInsertFireTriggers, boolean bulkCopyForBatchInsertKeepIdentity, 
+            boolean bulkCopyForBatchInsertKeepNulls, boolean bulkCopyForBatchInsertTableLock, 
+            boolean bulkCopyForBatchInsertAllowEncryptedValueModifications) throws SQLException {
+        
         final String description = " values do not match.";
         assertEquals(autoCommitMode, con.getAutoCommit(), "autoCommitmode" + description);
-        assertEquals(transactionIsolationLevel, con.getTransactionIsolation(),
-                "transactionIsolationLevel" + description);
+        assertEquals(transactionIsolationLevel, con.getTransactionIsolation(), "transactionIsolationLevel" + description);
         assertEquals(networkTimeout, con.getNetworkTimeout(), "networkTimeout" + description);
         assertEquals(holdability, con.getHoldability(), "holdability" + description);
         assertEquals(sendTimeAsDatetime, con.getSendTimeAsDatetime(), "sendTimeAsDatetime" + description);
-        assertEquals(statementPoolingCacheSize, con.getStatementPoolingCacheSize(),
-                "statementPoolingCacheSize" + description);
-        assertEquals(disableStatementPooling, con.getDisableStatementPooling(),
-                "disableStatementPooling" + description);
-        assertEquals(serverPreparedStatementDiscardThreshold, con.getServerPreparedStatementDiscardThreshold(),
-                "serverPreparedStatementDiscardThreshold" + description);
-        assertEquals(enablePrepareOnFirstPreparedStatementCall, con.getEnablePrepareOnFirstPreparedStatementCall(),
-                "enablePrepareOnFirstPreparedStatementCall" + description);
+        assertEquals(statementPoolingCacheSize, con.getStatementPoolingCacheSize(), "statementPoolingCacheSize" + description);
+        assertEquals(disableStatementPooling, con.getDisableStatementPooling(), "disableStatementPooling" + description);
+        assertEquals(serverPreparedStatementDiscardThreshold, con.getServerPreparedStatementDiscardThreshold(), "serverPreparedStatementDiscardThreshold" + description);
+        assertEquals(enablePrepareOnFirstPreparedStatementCall, con.getEnablePrepareOnFirstPreparedStatementCall(), "enablePrepareOnFirstPreparedStatementCall" + description);
         assertEquals(sCatalog, con.getCatalog(), "sCatalog" + description);
-        assertEquals(useBulkCopyForBatchInsert, con.getUseBulkCopyForBatchInsert(),
-                "useBulkCopyForBatchInsert" + description);
+        assertEquals(useBulkCopyForBatchInsert, con.getUseBulkCopyForBatchInsert(), "useBulkCopyForBatchInsert" + description);
         assertEquals(useFmtOnly, con.getUseFmtOnly(), "useFmtOnly" + description);
         assertEquals(delayLoadingLobs, con.getDelayLoadingLobs(), "delayLoadingLobs" + description);
+        assertEquals(ignoreOffsetOnDateTimeOffsetConversion, con.getIgnoreOffsetOnDateTimeOffsetConversion(), "ignoreOffsetOnDateTimeOffsetConversion" + description);
+        assertEquals(bulkCopyForBatchInsertBatchSize, con.getBulkCopyForBatchInsertBatchSize(), "bulkCopyForBatchInsertBatchSize" + description);
+        assertEquals(bulkCopyForBatchInsertCheckConstraints, con.getBulkCopyForBatchInsertCheckConstraints(), "bulkCopyForBatchInsertCheckConstraints" + description);
+        assertEquals(bulkCopyForBatchInsertFireTriggers, con.getBulkCopyForBatchInsertFireTriggers(), "bulkCopyForBatchInsertFireTriggers" + description);
+        assertEquals(bulkCopyForBatchInsertKeepIdentity, con.getBulkCopyForBatchInsertKeepIdentity(), "bulkCopyForBatchInsertKeepIdentity" + description);
+        assertEquals(bulkCopyForBatchInsertKeepNulls, con.getBulkCopyForBatchInsertKeepNulls(), "bulkCopyForBatchInsertKeepNulls" + description);
+        assertEquals(bulkCopyForBatchInsertTableLock, con.getBulkCopyForBatchInsertTableLock(), "bulkCopyForBatchInsertTableLock" + description);
+        assertEquals(bulkCopyForBatchInsertAllowEncryptedValueModifications, con.getBulkCopyForBatchInsertAllowEncryptedValueModifications(), "bulkCopyForBatchInsertAllowEncryptedValueModifications" + description);
     }
-
+    
     private void generateWarning(Connection con) throws SQLException {
         con.setClientInfo("name", "value");
     }
@@ -463,10 +516,18 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         verifiedMethodNames.add("setEnablePrepareOnFirstPreparedStatementCall");
         verifiedMethodNames.add("isClosed");
         verifiedMethodNames.add("setSendTimeAsDatetime");
+        verifiedMethodNames.add("setDatetimeParameterType");
         verifiedMethodNames.add("setStatementPoolingCacheSize");
         verifiedMethodNames.add("setDisableStatementPooling");
         verifiedMethodNames.add("setTransactionIsolation");
         verifiedMethodNames.add("setUseBulkCopyForBatchInsert");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertBatchSize");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertCheckConstraints");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertFireTriggers");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertKeepIdentity");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertKeepNulls");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertTableLock");
+        verifiedMethodNames.add("setBulkCopyForBatchInsertAllowEncryptedValueModifications");
         verifiedMethodNames.add("commit");
         verifiedMethodNames.add("clearWarnings");
         verifiedMethodNames.add("prepareStatement");
@@ -494,6 +555,7 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         verifiedMethodNames.add("createArrayOf");
         verifiedMethodNames.add("setUseFmtOnly");
         verifiedMethodNames.add("setDelayLoadingLobs");
+        verifiedMethodNames.add("setIgnoreOffsetOnDateTimeOffsetConversion");
         verifiedMethodNames.add("registerColumnEncryptionKeyStoreProvidersOnConnection");
         verifiedMethodNames.add("getPrepareMethod");
         verifiedMethodNames.add("setPrepareMethod");
@@ -501,6 +563,22 @@ public class RequestBoundaryMethodsTest extends AbstractTest {
         verifiedMethodNames.add("setIPAddressPreference");
         verifiedMethodNames.add("getMsiTokenCacheTtl");
         verifiedMethodNames.add("setMsiTokenCacheTtl");
+        verifiedMethodNames.add("getAccessTokenCallbackClass");
+        verifiedMethodNames.add("setAccessTokenCallbackClass");
+        verifiedMethodNames.add("getServerMessageHandler");
+        verifiedMethodNames.add("setServerMessageHandler");
+        verifiedMethodNames.add("setcacheBulkCopyMetadata");
+        verifiedMethodNames.add("getcacheBulkCopyMetadata");
+        verifiedMethodNames.add("getCalcBigDecimalPrecision");
+        verifiedMethodNames.add("setCalcBigDecimalPrecision");
+        verifiedMethodNames.add("registerBeforeReconnectListener");
+        verifiedMethodNames.add("removeBeforeReconnectListener");
+        verifiedMethodNames.add("getRetryExec");
+        verifiedMethodNames.add("setRetryExec");
+        verifiedMethodNames.add("getRetryConn");
+        verifiedMethodNames.add("setRetryConn");
+        verifiedMethodNames.add("getUseFlexibleCallableStatements");
+        verifiedMethodNames.add("setUseFlexibleCallableStatements");
         return verifiedMethodNames;
     }
 }

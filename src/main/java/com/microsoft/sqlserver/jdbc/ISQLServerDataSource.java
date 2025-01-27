@@ -111,11 +111,11 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     /**
      * Sets the option whether TLS encryption is used.
      * 
-     * @deprecated Use {@link ISQLServerDataSource#setEncrypt(String encryptOption)} instead
      * @param encryptOption
      *        TLS encrypt option. Default is true
+     * @deprecated Use {@link ISQLServerDataSource#setEncrypt(String encryptOption)} instead
      */
-    @Deprecated
+    @Deprecated(since = "10.1.0", forRemoval = true)
     void setEncrypt(boolean encryptOption);
 
     /**
@@ -342,6 +342,23 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
      *         java.sql.Time values will be sent to the server as a SQL Server time type.
      */
     boolean getSendTimeAsDatetime();
+
+    /**
+     * Sets the SQL server datatype to use for Java datetime and timestamp values.
+     * 
+     * @param datetimeParameterType
+     *        The SQL datatype to use when encoding Java dates for SQL Server. Valid values are:
+     *        datetime, datetime2 or datetimeoffset.
+     */
+    void setDatetimeParameterType(String datetimeParameterType);
+
+    /**
+     * Returns the value of the datetimeParameterType connection property. This method was added in SQL Server JDBC Driver
+     * 12.2. Returns the setting of the datetimeParameterType connection property.
+     * 
+     * @return Returns the value of the datetimeParameterType property.
+     */
+    String getDatetimeParameterType();
 
     /**
      * Sets a boolean value that indicates if sending string parameters to the server in UNICODE format is enabled.
@@ -578,8 +595,23 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     String getServerSpn();
 
     /**
+     * Sets the value to indicate whether useDefaultGSSCredential is enabled.
+     *
+     * @param enable
+     *        true if useDefaultGSSCredential is enabled. Otherwise, false.
+     */
+    void setUseDefaultGSSCredential(boolean enable);
+
+    /**
+     * Returns the useDefaultGSSCredential.
+     *
+     * @return if enabled, return true. Otherwise, false.
+     */
+    boolean getUseDefaultGSSCredential();
+
+    /**
      * Sets the GSSCredential.
-     * 
+     *
      * @param userCredential
      *        the credential
      */
@@ -587,7 +619,7 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
 
     /**
      * Returns the GSSCredential.
-     * 
+     *
      * @return GSSCredential
      */
     GSSCredential getGSSCredentials();
@@ -785,29 +817,30 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     int getSocketTimeout();
 
     /**
-     * Sets the login configuration file for Kerberos authentication. This overrides the default configuration <i>
+     * Sets the login configuration name for Kerberos authentication. This overrides the default configuration <i>
      * SQLJDBCDriver </i>
-     * 
-     * @deprecated Use {@link ISQLServerDataSource#setJAASConfigurationName(String configurationName)} instead
      * 
      * @param configurationName
      *        the configuration name
+     * @deprecated Use {@link ISQLServerDataSource#setJAASConfigurationName(String configurationName)} instead
+     * 
      */
-    @Deprecated
+    @Deprecated(since = "9.3.0", forRemoval = true)
     void setJASSConfigurationName(String configurationName);
 
     /**
-     * Returns the login configuration file for Kerberos authentication.
-     * 
-     * @deprecated Use {@link ISQLServerDataSource#getJAASConfigurationName()} instead
+     * Returns the login configuration name for Kerberos authentication.
+     *
      * 
      * @return login configuration file name
+     * @deprecated Use {@link ISQLServerDataSource#getJAASConfigurationName()} instead
+     * 
      */
-    @Deprecated
+    @Deprecated(since = "9.3.0", forRemoval = true)
     String getJASSConfigurationName();
 
     /**
-     * Sets the login configuration file for Kerberos authentication. This overrides the default configuration <i>
+     * Sets the login configuration name for Kerberos authentication. This overrides the default configuration <i>
      * SQLJDBCDriver </i>
      * 
      * 
@@ -817,11 +850,27 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     void setJAASConfigurationName(String configurationName);
 
     /**
-     * Returns the login configuration file for Kerberos authentication.
+     * Returns the login configuration name for Kerberos authentication.
      * 
-     * @return login configuration file name
+     * @return login configuration name
      */
     String getJAASConfigurationName();
+
+    /**
+     * Returns whether the default JAAS Configuration should be used
+     *
+     * @return useDefaultJaasConfig boolean value
+     */
+    boolean getUseDefaultJaasConfig();
+
+    /**
+     * Sets whether the default JAAS Configuration will be used. This means the system-wide JAAS configuration
+     * is ignored to avoid conflicts with libraries that override the JAAS configuration.
+     *
+     * @param useDefaultJaasConfig
+     *        boolean property to use the default JAAS configuration
+     */
+    void setUseDefaultJaasConfig(boolean useDefaultJaasConfig);
 
     /**
      * Sets whether Fips Mode should be enabled/disabled on the connection. For FIPS enabled JVM this property should be
@@ -932,24 +981,128 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     void setUseBulkCopyForBatchInsert(boolean useBulkCopyForBatchInsert);
 
     /**
-     * This method is deprecated. Use {@link ISQLServerDataSource#setUser(String user)} instead.
-     *
+     * Sets the default batch size for bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertBatchSize
+     *        the default batch size for bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertBatchSize(int bulkCopyForBatchInsertBatchSize);
+
+    /**
+     * Returns the default batch size for bulk copy operations created from batch insert operations.
+     * 
+     * @return the default batch size for bulk copy operations created from batch insert operations.
+     */
+    int getBulkCopyForBatchInsertBatchSize();
+
+    /**
+     * Sets whether to check constraints during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertCheckConstraints
+     *        indicates whether to check constraints during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertCheckConstraints(boolean bulkCopyForBatchInsertCheckConstraints);
+
+    /**
+     * Returns whether to check constraints during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to check constraints during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertCheckConstraints();
+
+    /**
+     * Sets whether to fire triggers during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertFireTriggers
+     *        indicates whether to fire triggers during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertFireTriggers(boolean bulkCopyForBatchInsertFireTriggers);
+
+    /**
+     * Returns whether to fire triggers during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to fire triggers during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertFireTriggers();
+
+    /**
+     * Sets whether to keep identity values during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertKeepIdentity
+     *        indicates whether to keep identity values during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertKeepIdentity(boolean bulkCopyForBatchInsertKeepIdentity);
+
+    /**
+     * Returns whether to keep identity values during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to keep identity values during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertKeepIdentity();
+
+    /**
+     * Sets whether to keep null values during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertKeepNulls
+     *        indicates whether to keep null values during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertKeepNulls(boolean bulkCopyForBatchInsertKeepNulls);
+
+    /**
+     * Returns whether to keep null values during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to keep null values during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertKeepNulls();
+
+    /**
+     * Sets whether to use table lock during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertTableLock
+     *        indicates whether to use table lock during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertTableLock(boolean bulkCopyForBatchInsertTableLock);
+
+    /**
+     * Returns whether to use table lock during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to use table lock during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertTableLock();
+
+    /**
+     * Sets whether to allow encrypted value modifications during bulk copy operations created from batch insert operations.
+     * 
+     * @param bulkCopyForBatchInsertAllowEncryptedValueModifications
+     *        indicates whether to allow encrypted value modifications during bulk copy operations created from batch insert operations.
+     */
+    void setBulkCopyForBatchInsertAllowEncryptedValueModifications(boolean bulkCopyForBatchInsertAllowEncryptedValueModifications);
+
+    /**
+     * Returns whether to allow encrypted value modifications during bulk copy operations created from batch insert operations.
+     * 
+     * @return whether to allow encrypted value modifications during bulk copy operations created from batch insert operations.
+     */
+    boolean getBulkCopyForBatchInsertAllowEncryptedValueModifications();
+        
+    /**
      * Sets the client id to be used to retrieve the access token for a user-assigned Managed Identity.
      * 
      * @param managedIdentityClientId
      *        Client ID of the user-assigned Managed Identity.
+     * @deprecated Use {@link ISQLServerDataSource#setUser(String user)} instead.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     void setMSIClientId(String managedIdentityClientId);
 
     /**
-     * This method is deprecated. Use {@link ISQLServerDataSource#getUser()} instead.
-     *
      * Returns the value for the connection property 'msiClientId'.
      * 
      * @return msiClientId property value
+     * 
+     * @deprecated Use {@link ISQLServerDataSource#getUser()} instead.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     String getMSIClientId();
 
     /**
@@ -1123,35 +1276,36 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     void setSendTemporalDataTypesAsStringForBulkCopy(boolean sendTemporalDataTypesAsStringForBulkCopy);
 
     /**
+     * 
      * Returns the value for the connection property 'AADSecurePrincipalId'.
      * 
-     * @deprecated Use {@link ISQLServerDataSource#getUser()} instead
-     *
      * @return 'AADSecurePrincipalId' property value.
+     * @deprecated Use {@link ISQLServerDataSource#getUser()} instead
      */
-    @Deprecated
+    @Deprecated(since = "9.4.1", forRemoval = true)
     String getAADSecurePrincipalId();
 
     /**
+     *
      * Sets the 'AADSecurePrincipalId' connection property used for Active Directory Service Principal authentication.
      * 
-     * @deprecated Use {@link ISQLServerDataSource#setUser(String user)} instead
-     * @param AADSecurePrincipalId
+     * @param aadSecurePrincipalId
      *        Active Directory Service Principal Id.
+     * @deprecated Use {@link ISQLServerDataSource#setUser(String user)} instead
      */
-    @Deprecated
-    void setAADSecurePrincipalId(String AADSecurePrincipalId);
+    @Deprecated(since = "9.4.1", forRemoval = true)
+    void setAADSecurePrincipalId(String aadSecurePrincipalId);
 
     /**
      * Sets the 'AADSecurePrincipalSecret' connection property used for Active Directory Service Principal
      * authentication.
      * 
-     * @deprecated Use {@link ISQLServerDataSource#setPassword(String password)} instead
-     * @param AADSecurePrincipalSecret
+     * @param aadSecurePrincipalSecret
      *        Active Directory Service Principal secret.
+     * @deprecated Use {@link ISQLServerDataSource#setPassword(String password)} instead
      */
-    @Deprecated
-    void setAADSecurePrincipalSecret(String AADSecurePrincipalSecret);
+    @Deprecated(since = "9.4.1", forRemoval = true)
+    void setAADSecurePrincipalSecret(String aadSecurePrincipalSecret);
 
     /**
      * Returns value of 'maxResultBuffer' from Connection String.
@@ -1214,22 +1368,26 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
     String getPrepareMethod();
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
+     * Time-to-live is no longer supported for the cached Managed Identity tokens.
      * This method is a no-op for backwards compatibility only.
      *
      * @param timeToLive
      *        Time-to-live is no longer supported.
+     * 
+     * @deprecated
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     void setMsiTokenCacheTtl(int timeToLive);
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
+     * Time-to-live is no longer supported for the cached Managed Identity tokens.
      * This method will always return 0 and is for backwards compatibility only.
      *
      * @return Method will always return 0.
+     * 
+     * @deprecated
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     int getMsiTokenCacheTtl();
 
     /**
@@ -1246,4 +1404,106 @@ public interface ISQLServerDataSource extends javax.sql.CommonDataSource {
      * @return Access token callback delegate.
      */
     SQLServerAccessTokenCallback getAccessTokenCallback();
+
+    /**
+     * Returns the fully qualified class name of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @return accessTokenCallbackClass
+     */
+    String getAccessTokenCallbackClass();
+
+    /**
+     * Sets 'accessTokenCallbackClass' to the fully qualified class name
+     * of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @param accessTokenCallbackClass
+     *        access token callback class
+     * 
+     */
+    void setAccessTokenCallbackClass(String accessTokenCallbackClass);
+
+    /**
+     * Returns value of 'calcBigDecimalPrecision' from Connection String.
+     *
+     * @param calcBigDecimalPrecision
+     *        indicates whether the driver should attempt to calculate precision from inputted big decimal values
+     */
+    void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision);
+
+    /**
+     * Sets the value for 'calcBigDecimalPrecision' property
+     *
+     * @return calcBigDecimalPrecision boolean value
+     */
+    boolean getCalcBigDecimalPrecision();
+
+    /**
+     * Returns value of 'cacheBulkCopyMetadata' from Connection String.
+     *
+     * @param cacheBulkCopyMetadata
+     *        indicates whether the driver should use connection level caching of metadata for bulk copy
+     */
+    void setcacheBulkCopyMetadata(boolean cacheBulkCopyMetadata);
+
+    /**
+     * Sets the value for 'cacheBulkCopyMetadata' property
+     *
+     * @return cacheBulkCopyMetadata boolean value
+     */
+    boolean getcacheBulkCopyMetadata();
+  
+   /**
+     * Returns value of 'retryExec' from Connection String.
+     *
+     * @param retryExec
+     *        Set of rules used for statement (execution) retry
+     */
+    void setRetryExec(String retryExec);
+
+    /**
+     * Sets the value for 'retryExec' property
+     *
+     * @return retryExec
+     *         String value
+     */
+    String getRetryExec();
+
+    /**
+     * Returns value of 'retryConn' from Connection String.
+     *
+     * @param retryConn
+     *          Set of rules used for connection retry
+     */
+    void setRetryConn(String retryConn);
+
+    /**
+     * Sets the value for 'retryConn' property
+     *
+     * @return retryConn
+     *         String value
+     */
+    String getRetryConn();
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed. This is meant as a no-op.
+     *
+     * Sets whether or not sp_sproc_columns will be used for parameter name lookup.
+     *
+     * @param useFlexibleCallableStatements
+     *        When set to false, sp_sproc_columns is not used for parameter name lookup
+     *        in callable statements. This eliminates a round trip to the server but imposes limitations
+     *        on how parameters are set. When set to false, applications must either reference
+     *        parameters by name or by index, not both. Parameters must also be set in the same
+     *        order as the stored procedure definition.
+     */
+    void setUseFlexibleCallableStatements(boolean useFlexibleCallableStatements);
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed. This is meant as a no-op.
+     *
+     * Returns whether or not sp_sproc_columns is being used for parameter name lookup.
+     *
+     * @return useFlexibleCallableStatements
+     */
+    boolean getUseFlexibleCallableStatements();
 }

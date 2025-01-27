@@ -13,9 +13,16 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.lang.reflect.Field;
 import java.sql.BatchUpdateException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Types;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.Date;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -28,7 +35,12 @@ import com.microsoft.sqlserver.jdbc.SQLServerConnection;
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
 import com.microsoft.sqlserver.jdbc.SQLServerPreparedStatement;
 import com.microsoft.sqlserver.jdbc.TestResource;
+import com.microsoft.sqlserver.jdbc.TestUtils;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.platform.runner.JUnitPlatform;
@@ -43,13 +55,25 @@ import com.microsoft.sqlserver.testframework.PrepUtil;
 @RunWith(JUnitPlatform.class)
 public class PreparedStatementTest extends AbstractTest {
 
-    final String tableName = RandomUtil.getIdentifier("tableTestStatementPoolingInternal1");
-    final String tableName2 = RandomUtil.getIdentifier("tableTestStatementPoolingInternal2");
-    final String tableName3 = RandomUtil.getIdentifier("tableTestPreparedStatementWithSpPrepare");
+    final static String tableName = RandomUtil.getIdentifier("tableTestStatementPoolingInternal1");
+    final static String tableName2 = RandomUtil.getIdentifier("tableTestStatementPoolingInternal2");
+    final static String tableName3 = RandomUtil.getIdentifier("tableTestPreparedStatementWithSpPrepare");
+    final static String tableName4 = RandomUtil.getIdentifier("tableTestPreparedStatementWithMultipleParams");
+    final static String tableName5 = RandomUtil.getIdentifier("tableTestPreparedStatementWithTimestamp");
 
     @BeforeAll
     public static void setupTests() throws Exception {
         setConnection();
+    }
+
+    @BeforeEach
+    public void testInit() throws Exception {
+        dropTables();
+    }
+
+    @AfterEach
+    public void terminateVariation() throws Exception {
+        dropTables();
     }
 
     private void executeSQL(SQLServerConnection conn, String sql) throws SQLException {
@@ -102,6 +126,114 @@ public class PreparedStatementTest extends AbstractTest {
             }
         }
     }
+    
+    @Test
+    void testDatabaseQueryMetaData() throws SQLException {
+        try (Connection connection = getConnection()) {
+            try (SQLServerPreparedStatement stmt = (SQLServerPreparedStatement) connection.prepareStatement(
+                    "select 1 as \"any questions ???\"")) {
+                ResultSetMetaData metaData = stmt.getMetaData();
+                String actualLabel = metaData.getColumnLabel(1);
+                String actualName = metaData.getColumnName(1);
+
+                String expected = "any questions ???";
+                assertEquals(expected, actualLabel, "Column label should match the expected value");
+                assertEquals(expected, actualName, "Column name should match the expected value");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            fail("SQLException occurred during test: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void testPreparedStatementParamNameSpacingWithMultipleParams() throws SQLException {
+        int paramNameCount = 105;
+
+        StringBuilder insertSql = new StringBuilder(
+                "insert into " + AbstractSQLGenerator.escapeIdentifier(tableName4) + "values(");
+
+        for (int i = 1; i <= paramNameCount; i++) {
+            insertSql.append(i % 10);
+
+            if (i != paramNameCount) {
+                insertSql.append(",");
+            } else {
+                insertSql.append(")");
+            }
+        }
+
+        StringBuilder createTableSql = new StringBuilder(
+                "create table " + AbstractSQLGenerator.escapeIdentifier(tableName4) + "(");
+
+        for (int i = 1; i <= paramNameCount; i++) {
+            createTableSql.append("c" + i + " char(1)");
+
+            if (i != paramNameCount) {
+                createTableSql.append(",");
+            } else {
+                createTableSql.append(")");
+            }
+        }
+
+        try (SQLServerConnection con = (SQLServerConnection) getConnection()) {
+            executeSQL(con, createTableSql.toString());
+            executeSQL(con, insertSql.toString());
+
+            // There are no typos in the queries eg. The 'c1=?and' is not a typo. We are testing the spacing, or lack of spacing.
+            // The driver should automatically space out the params eg. 'c1=?and' becomes 'c1= ? and' in the final string we send to the server.
+
+            // Testing with less than 10 params
+            String sql1 = "select * from " + AbstractSQLGenerator.escapeIdentifier(tableName4) + " where c1=?and c2=?";
+
+            // Testing with number of params between 10 and 100
+            String sql2 = "select * from " + AbstractSQLGenerator.escapeIdentifier(tableName4)
+                    + " where c1=?and c2=? and c3=?and c4=? and c5=? and c6=? and c7=? and c8=? and c9=? and c10=? and c11=? and c12=?";
+
+            // Testing with more than 100 params
+            StringBuilder sql3 = new StringBuilder(
+                    "select * from " + AbstractSQLGenerator.escapeIdentifier(tableName4) + " where c1=?and ");
+
+            for (int i = 2; i <= paramNameCount; i++) {
+                sql3.append("c" + i + "=?");
+
+                if (i != paramNameCount) {
+                    sql3.append(" and ");
+                }
+            }
+
+            try (SQLServerPreparedStatement ps = (SQLServerPreparedStatement) con.prepareStatement(sql1)) {
+                ps.setString(1, "1");
+                ps.setString(2, "2");
+                ps.executeQuery();
+            }
+
+            try (SQLServerPreparedStatement ps = (SQLServerPreparedStatement) con.prepareStatement(sql2)) {
+                ps.setString(1, "1");
+                ps.setString(2, "2");
+                ps.setString(3, "3");
+                ps.setString(4, "4");
+                ps.setString(5, "5");
+                ps.setString(6, "6");
+                ps.setString(7, "7");
+                ps.setString(8, "8");
+                ps.setString(9, "9");
+                ps.setString(10, "0");
+                ps.setString(11, "1");
+                ps.setString(12, "2");
+                ps.executeQuery();
+            }
+
+            try (SQLServerPreparedStatement ps = (SQLServerPreparedStatement) con.prepareStatement(sql3.toString())) {
+                ps.setString(1, "1");
+                for (int i = 2; i <= paramNameCount; i++) {
+                    ps.setString(i, Integer.toString(i % 10));
+                }
+
+                ps.executeQuery();
+            }
+        }
+    }
 
     @Test
     public void testPreparedStatementPoolEvictionWithSpPrepare() throws SQLException {
@@ -118,8 +250,7 @@ public class PreparedStatementTest extends AbstractTest {
             String query = "select 1 --";
 
             for (int i = 0; i < cacheSize; i++) {
-                try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) con
-                        .prepareStatement(query + i)) {
+                try (SQLServerPreparedStatement pstmt = (SQLServerPreparedStatement) con.prepareStatement(query + i)) {
                     pstmt.execute(); // sp_executesql
                     pstmt.execute(); // sp_prepare and sp_execute, handle created and cached
                 }
@@ -155,7 +286,9 @@ public class PreparedStatementTest extends AbstractTest {
             con.setStatementPoolingCacheSize(0);
 
             // Clean-up proc cache
-            this.executeSQL(con, "DBCC FREEPROCCACHE;");
+            try (Statement stmt = con.createStatement()) {
+                TestUtils.freeProcCache(stmt);
+            }
 
             String lookupUniqueifier = UUID.randomUUID().toString();
 
@@ -374,6 +507,43 @@ public class PreparedStatementTest extends AbstractTest {
 
             // Verify that queue is now empty.
             assertSame(0, con.getDiscardedServerPreparedStatementCount());
+        }
+    }
+
+    @Test
+    public void testTimestampStringTimeZoneFormat() throws SQLException {
+        String SELECT_SQL = "SELECT id, created_date, deleted_date FROM "
+                + AbstractSQLGenerator.escapeIdentifier(tableName5) + " WHERE id = ?";
+        String INSERT_SQL = "INSERT INTO " + AbstractSQLGenerator.escapeIdentifier(tableName5)
+                + " (id, created_date, deleted_date) VALUES (?, ?, ?)";
+        String DATE_FORMAT_WITH_Z = "yyyy-MM-dd'T'HH:mm:ss'Z'";
+        SimpleDateFormat sdf = new SimpleDateFormat(DATE_FORMAT_WITH_Z);
+
+        try (SQLServerConnection con = (SQLServerConnection) getConnection()) {
+            executeSQL(con, "create table " + AbstractSQLGenerator.escapeIdentifier(tableName5)
+                    + "(id int, created_date datetime2, deleted_date datetime2)");
+        }
+
+        try (PreparedStatement selectStatement = connection.prepareCall(SELECT_SQL);
+                PreparedStatement insertStatement = connection.prepareCall(INSERT_SQL);) {
+            Date createdDate = Date.from(Instant.parse("2024-01-16T05:12:00Z"));
+            Date deletedDate = Date.from(Instant.parse("2024-01-16T06:34:00Z"));
+            int id = 1;
+
+            insertStatement.setInt(1, id);
+            insertStatement.setObject(2, sdf.format(createdDate.getTime()), Types.TIMESTAMP);
+            insertStatement.setObject(3, sdf.format(deletedDate.getTime()), Types.TIMESTAMP);
+
+            insertStatement.executeUpdate();
+
+            selectStatement.setInt(1, id);
+
+            try (ResultSet result = selectStatement.executeQuery()) {
+                result.next();
+                Assertions.assertEquals(id, result.getInt("id"));
+                Assertions.assertEquals(createdDate, new Date(result.getTimestamp("created_date").getTime()));
+                Assertions.assertEquals(deletedDate, new Date(result.getTimestamp("deleted_date").getTime()));
+            }
         }
     }
 
@@ -768,4 +938,15 @@ public class PreparedStatementTest extends AbstractTest {
 
         con.setUseBulkCopyForBatchInsert(true);
     }
+
+    private static void dropTables() throws Exception {
+        try (Statement stmt = connection.createStatement()) {
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName), stmt);
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName2), stmt);
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName3), stmt);
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName4), stmt);
+            TestUtils.dropTableIfExists(AbstractSQLGenerator.escapeIdentifier(tableName5), stmt);
+        }
+    }
+    
 }

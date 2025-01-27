@@ -9,15 +9,17 @@ Welcome to the Microsoft JDBC Driver for SQL Server project!
 
 The Microsoft JDBC Driver for SQL Server is a Type 4 JDBC driver that provides database connectivity through the standard JDBC application program interfaces (APIs) available in the Java Platform, Enterprise Editions. The Driver provides access to Microsoft SQL Server and Azure SQL Database from any Java application, application server, or Java-enabled applet.
 
+Releases can be found on the [GitHub Releases](https://github.com/microsoft/mssql-jdbc/releases) page, in the [Microsoft JDBC Documentation](https://learn.microsoft.com/en-us/sql/connect/jdbc/download-microsoft-jdbc-driver-for-sql-server?view=sql-server-ver16), or via Maven. Starting from preview release 12.1.0, each release contains two versions of the driver. One for use with Java 8 (jre8), and one for use with version Java 11 and above (jre11).
+
 We hope you enjoy using the Microsoft JDBC Driver for SQL Server.
 
-SQL Server Team
+Microsoft JDBC driver for SQL Server Team
 
 ## Take our survey
 
 Let us know how you think we're doing.
 
-<a href="https://aka.ms/mssqljdbcsurvey"><img style="float: right;"  height="67" width="156" src="https://sqlchoice.blob.core.windows.net/sqlchoice/static/images/survey.png"></a>
+<a href="https://aka.ms/mssqljdbcsurvey"><img style="float: right;"  height="50" width="125" src="https://img.shields.io/badge/Survey-70B244"></a>
 
 ## Status of Most Recent Builds
 | Azure Pipelines (Windows) | Azure Pipelines (Linux) | Azure Pipelines (MacOS) |
@@ -28,10 +30,7 @@ Let us know how you think we're doing.
 What's coming next?  We will look into adding a more comprehensive set of tests, improving our javadocs, and start developing the next set of features.
 
 ## Get Started 
-* [**Ubuntu + SQL Server + Java**](https://www.microsoft.com/en-us/sql-server/developer-get-started/java/ubuntu) 
-* [**Red Hat + SQL Server + Java**](https://www.microsoft.com/en-us/sql-server/developer-get-started/java/rhel)
-* [**Mac + SQL Server + Java**](https://www.microsoft.com/en-us/sql-server/developer-get-started/java/mac)
-* [**Windows + SQL Server + Java**](https://www.microsoft.com/en-us/sql-server/developer-get-started/java/windows)
+[**Getting started with SQL Server and Java**](https://github.com/AzureSQLDB/sql-driver-examples/blob/main/examples/sql/drivers/java-driver-example.md)
 
 ## Build
 ### Prerequisites
@@ -47,7 +46,8 @@ To build the jar files, you must use minimum version of Java 11 with Maven. You 
 * Maven:
 	1. If you have not already done so, add the environment variable `mssql_jdbc_test_connection_properties` in your system with the connection properties for your SQL Server or SQL DB instance.
 	2. Run one of the commands below to build a JRE 11 and newer versions compatible jar or JRE 8 compatible jar in the `\target` directory. 
-        * Run `mvn install -Pjre19`. This creates JRE 19 compatible jar in `\target` directory which is JDBC 4.3 compliant (Build with JDK 19).
+        * Run `mvn install -Pjre23`. This creates JRE 23 compatible jar in `\target` directory which is JDBC 4.3 compliant (Build with JDK 23).
+        * Run `mvn install -Pjre21`. This creates JRE 21 compatible jar in `\target` directory which is JDBC 4.3 compliant (Build with JDK 21+).
         * Run `mvn install -Pjre17`. This creates JRE 17 compatible jar in `\target` directory which is JDBC 4.3 compliant (Build with JDK 17+).
         * Run `mvn install -Pjre11`. This creates JRE 11 compatible jar in `\target` directory which is JDBC 4.3 compliant (Build with JDK 11+).
         * Run `mvn install -Pjre8`. This creates JRE 8 compatible jar in `\target` directory which is JDBC 4.2 compliant (Build with JDK 11+).
@@ -55,7 +55,8 @@ To build the jar files, you must use minimum version of Java 11 with Maven. You 
 * Gradle:
 	1. If you have not already done so, add the environment variable `mssql_jdbc_test_connection_properties` in your system with the connection properties for your SQL Server or SQL DB instance.
 	2. Run one of the commands below to build a JRE 11 and newer versions compatible jar or JRE 8 compatible jar in the `\build\libs` directory. 
-        * Run `gradle build -PbuildProfile=jre19`. This creates JRE 19 compatible jar in `\build\libs` directory which is JDBC 4.3 compliant (Build with JDK 19).
+        * Run `gradle build -PbuildProfile=jre23`. This creates JRE 23 compatible jar in `\build\libs` directory which is JDBC 4.3 compliant (Build with JDK 23).
+        * Run `gradle build -PbuildProfile=jre21`. This creates JRE 21 compatible jar in `\build\libs` directory which is JDBC 4.3 compliant (Build with JDK 21+).
         * Run `gradle build -PbuildProfile=jre17`. This creates JRE 17 compatible jar in `\build\libs` directory which is JDBC 4.3 compliant (Build with JDK 17+).
         * Run `gradle build -PbuildProfile=jre11`. This creates JRE 11 compatible jar in `\build\libs` directory which is JDBC 4.3 compliant (Build with JDK 11+).
         * Run `gradle build -PbuildProfile=jre8`. This creates JRE 8 compatible jar in `\build\libs` directory which is JDBC 4.2 compliant (Build with JDK 11+).
@@ -82,10 +83,10 @@ We're now on the Maven Central Repository. Add the following to your POM file to
 <dependency>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>11.2.0.jre11</version>
+	<version>12.8.1.jre11</version>
 </dependency>
 ```
-The driver can be downloaded from [Microsoft](https://aka.ms/downloadmssqljdbc).
+The driver can be downloaded from [Microsoft](https://aka.ms/downloadmssqljdbc). For driver version 12.1.0 and greater, please use the jre11 version when using Java 11 or greater, and the jre8 version when using Java 8.
 
 To get the latest version of the driver, add the following to your POM file: 
 
@@ -93,7 +94,7 @@ To get the latest version of the driver, add the following to your POM file:
 <dependency>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>11.2.0.jre11</version>
+	<version>12.8.1.jre11</version>
 </dependency>
 ```
 
@@ -107,7 +108,7 @@ This project has following dependencies:
 Compile Time:
  - `com.azure:azure-security-keyvault-keys` : Microsoft Azure Client Library For KeyVault Keys (optional)
  - `com.azure:azure-identity` : Microsoft Azure Client Library For Identity (optional)
- - `org.bouncycastle:bcprov-jdk15on` : Bouncy Castle Provider for Always Encrypted with secure enclaves feature with JAVA 8 only (optional)
+ - `org.bouncycastle:bcprov-jdk18on` : Bouncy Castle Provider for Always Encrypted with secure enclaves feature with JAVA 8 only (optional)
  - `com.google.code.gson:gson` : Gson for Always Encrypted with secure enclaves feature (optional)
 
 Test Time:
@@ -128,14 +129,14 @@ Projects that require either of the two features need to explicitly declare the 
 <dependency>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>11.2.0.jre11</version>
+	<version>12.8.1.jre11</version>
 	<scope>compile</scope>
 </dependency>
 
 <dependency>
 	<groupId>com.azure</groupId>
 	<artifactId>azure-identity</artifactId>
-	<version>1.3.3</version>
+	<version>1.12.2</version>
 </dependency>
 
 ```
@@ -146,20 +147,20 @@ Projects that require either of the two features need to explicitly declare the 
 <dependency>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>11.2.0.jre11</version>
+	<version>12.8.1.jre11</version>
 	<scope>compile</scope>
 </dependency>
 
 <dependency>
 	<groupId>com.azure</groupId>
 	<artifactId>azure-identity</artifactId>
-	<version>1.3.3</version>
+	<version>1.12.2</version>
 </dependency>
 
 <dependency>
 	<groupId>com.azure</groupId>
 	<artifactId>azure-security-keyvault-keys</artifactId>
-	<version>4.2.8</version>
+	<version>4.7.3</version>
 </dependency>
 ```
 
@@ -173,13 +174,13 @@ When setting 'useFmtOnly' property to 'true' for establishing a connection or cr
 <dependency>
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>11.2.0.jre11</version>
+	<version>12.8.1.jre11</version>
 </dependency>
 
 <dependency>
 	<groupId>org.antlr</groupId>
 	<artifactId>antlr4-runtime</artifactId>
-	<version>4.9.2</version>
+	<version>4.9.3</version>
 </dependency>
 ```
 
@@ -213,7 +214,7 @@ Preview releases happen approximately monthly between stable releases. This give
 You can see what is going into a future release by monitoring [Milestones](https://github.com/Microsoft/mssql-jdbc/milestones) in the repository.
 
 ### Version conventions
-Starting with 6.0, stable versions have an even minor version. For example, 6.0, 6.2, 6.4, 7.0, 7.2, 7.4, 8.2, 8.4, 9.2, 9.4, 10.2, 11.2. Preview versions have an odd minor version. For example, 6.1, 6.3, 6.5, 7.1, 7.3, 8.1, 9.1, 10.1, 11.1, and so on.
+Starting with 6.0, stable versions have an even minor version. For example, 6.0, 6.2, 6.4, 7.0, 7.2, 7.4, 8.2, 8.4, 9.2, 9.4, 10.2, 11.2, 12.2, 12.4, 12.6, 12.8. Preview versions have an odd minor version. For example, 6.1, 6.3, 6.5, 7.1, 7.3, 8.1, 9.1, 10.1, 11.1, 12.1, 12.3, 12.5, 12.7, 12.9, and so on.
 
 ## Contributors 
 Special thanks to everyone who has contributed to the project. 
@@ -229,13 +230,13 @@ Here are our Top 15 contributors from the community:
 - simon04 (Simon Legner)
 - gstojsic
 - cosmofrit
-- harawata- shayaantx
-- (Iwao AVE!)
-- nsidhaye (Nikhil Sidhaye)
+- mmimica  (Milan Mimica)
+- harawata (Iwao AVE!)
 - rPraml (Roland Praml)
+- laeubi (Christoph Laubrich)
 - worldtiki (Daniel Albuquerque)
 - shayaantx
-- mfriesen (Mike Friesen)
+- mnhubspot 
 
 
 ## License

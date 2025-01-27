@@ -7,6 +7,8 @@ package com.microsoft.sqlserver.jdbc;
 
 import java.text.MessageFormat;
 import java.util.logging.Level;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 class FedAuthDllInfo {
@@ -36,6 +38,8 @@ final class AuthenticationJNI extends SSPIAuthentication {
     private SQLServerConnection con;
 
     private static final UnsatisfiedLinkError linkError;
+
+    private static final Lock lock = new ReentrantLock();
 
     static int getMaxSSPIBlobSize() {
         return sspiBlobMaxlen;
@@ -82,9 +86,14 @@ final class AuthenticationJNI extends SSPIAuthentication {
 
     static FedAuthDllInfo getAccessTokenForWindowsIntegrated(String stsURL, String servicePrincipalName,
             String clientConnectionId, String clientId, long expirationFileTime) throws DLLException {
-        FedAuthDllInfo dllInfo = ADALGetAccessTokenForWindowsIntegrated(stsURL, servicePrincipalName,
-                clientConnectionId, clientId, expirationFileTime, authLogger);
-        return dllInfo;
+        try {
+            lock.lock();
+
+            return ADALGetAccessTokenForWindowsIntegrated(stsURL, servicePrincipalName, clientConnectionId, clientId,
+                    expirationFileTime, authLogger);
+        } finally {
+            lock.unlock();
+        }
     }
 
     // InitDNSName should be called to initialize the DNSName before calling this function
@@ -155,13 +164,13 @@ final class AuthenticationJNI extends SSPIAuthentication {
 
     private static native int GetDNSName(String address, String[] DNSName, java.util.logging.Logger log);
 
-    private static synchronized native FedAuthDllInfo ADALGetAccessTokenForWindowsIntegrated(String stsURL,
+    private static native FedAuthDllInfo ADALGetAccessTokenForWindowsIntegrated(String stsURL,
             String servicePrincipalName, String clientConnectionId, String clientId, long expirationFileTime,
             java.util.logging.Logger log);
 
-    static synchronized native byte[] DecryptColumnEncryptionKey(String masterKeyPath, String encryptionAlgorithm,
+    static native byte[] DecryptColumnEncryptionKey(String masterKeyPath, String encryptionAlgorithm,
             byte[] encryptedColumnEncryptionKey) throws DLLException;
 
-    static synchronized native boolean VerifyColumnMasterKeyMetadata(String keyPath, boolean allowEnclaveComputations,
+    static native boolean VerifyColumnMasterKeyMetadata(String keyPath, boolean allowEnclaveComputations,
             byte[] signature) throws DLLException;
 }

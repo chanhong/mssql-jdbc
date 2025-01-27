@@ -33,6 +33,8 @@ public class SQLServerDataSource
     static final private java.util.logging.Logger parentLogger = java.util.logging.Logger
             .getLogger("com.microsoft.sqlserver.jdbc");
 
+    static final String TRUSTSTORE_PASSWORD_STRIPPED = "trustStorePasswordStripped";
+
     /** logging class name */
     final private String loggingClassName;
 
@@ -168,7 +170,7 @@ public class SQLServerDataSource
     @Override
     public String getApplicationName() {
         return getStringProperty(connectionProps, SQLServerDriverStringProperty.APPLICATION_NAME.toString(),
-                SQLServerDriverStringProperty.APPLICATION_NAME.getDefaultValue());
+        SQLServerDriverStringProperty.APPLICATION_NAME.getDefaultValue());
     }
 
     /**
@@ -235,6 +237,18 @@ public class SQLServerDataSource
         return (GSSCredential) getObjectProperty(connectionProps,
                 SQLServerDriverObjectProperty.GSS_CREDENTIAL.toString(),
                 SQLServerDriverObjectProperty.GSS_CREDENTIAL.getDefaultValue());
+    }
+
+    @Override
+    public void setUseDefaultGSSCredential(boolean enable) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.toString(),
+                enable);
+    }
+
+    @Override
+    public boolean getUseDefaultGSSCredential() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.toString(),
+                SQLServerDriverBooleanProperty.USE_DEFAULT_GSS_CREDENTIAL.getDefaultValue());
     }
 
     @Override
@@ -310,8 +324,11 @@ public class SQLServerDataSource
         setStringProperty(connectionProps, SQLServerDriverStringProperty.ENCRYPT.toString(), encryptOption);
     }
 
+    /**
+     * @deprecated
+     */
     @Override
-    @Deprecated
+    @Deprecated(since = "10.1.0", forRemoval = true)
     public void setEncrypt(boolean encryptOption) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.ENCRYPT.toString(),
                 Boolean.toString(encryptOption));
@@ -521,6 +538,18 @@ public class SQLServerDataSource
     public boolean getSendTimeAsDatetime() {
         return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.SEND_TIME_AS_DATETIME.toString(),
                 SQLServerDriverBooleanProperty.SEND_TIME_AS_DATETIME.getDefaultValue());
+    }
+
+    @Override
+    public void setDatetimeParameterType(String datetimeParameterType) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.DATETIME_DATATYPE.toString(),
+                datetimeParameterType);
+    }
+
+    @Override
+    public String getDatetimeParameterType() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.DATETIME_DATATYPE.toString(),
+                SQLServerDriverStringProperty.DATETIME_DATATYPE.getDefaultValue());
     }
 
     @Override
@@ -918,6 +947,21 @@ public class SQLServerDataSource
     }
 
     @Override
+    public void setcacheBulkCopyMetadata(boolean cacheBulkCopyMetadata) {
+        setBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE.toString(),
+                cacheBulkCopyMetadata);
+    }
+
+    @Override
+    public boolean getcacheBulkCopyMetadata() {
+        boolean defaultValue = SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE
+                .getDefaultValue();
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.ENABLE_BULK_COPY_CACHE.toString(), defaultValue);
+    }
+
+    @Override
     public void setServerPreparedStatementDiscardThreshold(int serverPreparedStatementDiscardThreshold) {
         setIntProperty(connectionProps,
                 SQLServerDriverIntProperty.SERVER_PREPARED_STATEMENT_DISCARD_THRESHOLD.toString(),
@@ -982,14 +1026,110 @@ public class SQLServerDataSource
     }
 
     @Override
-    @Deprecated
+    public void setBulkCopyForBatchInsertBatchSize(int bulkCopyForBatchInsertBatchSize) {
+        setIntProperty(connectionProps, SQLServerDriverIntProperty.BULK_COPY_FOR_BATCH_INSERT_BATCH_SIZE.toString(),
+                bulkCopyForBatchInsertBatchSize);
+    }
+
+    @Override
+    public int getBulkCopyForBatchInsertBatchSize() {
+        return getIntProperty(connectionProps,
+                SQLServerDriverIntProperty.BULK_COPY_FOR_BATCH_INSERT_BATCH_SIZE.toString(),
+                SQLServerDriverIntProperty.BULK_COPY_FOR_BATCH_INSERT_BATCH_SIZE.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertCheckConstraints(boolean bulkCopyForBatchInsertCheckConstraints) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_CHECK_CONSTRAINTS.toString(),
+                bulkCopyForBatchInsertCheckConstraints);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertCheckConstraints() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_CHECK_CONSTRAINTS.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_CHECK_CONSTRAINTS.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertFireTriggers(boolean bulkCopyForBatchInsertFireTriggers) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_FIRE_TRIGGERS.toString(),
+                bulkCopyForBatchInsertFireTriggers);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertFireTriggers() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_FIRE_TRIGGERS.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_FIRE_TRIGGERS.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertKeepIdentity(boolean bulkCopyForBatchInsertKeepIdentity) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_IDENTITY.toString(),
+                bulkCopyForBatchInsertKeepIdentity);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertKeepIdentity() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_IDENTITY.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_IDENTITY.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertKeepNulls(boolean bulkCopyForBatchInsertKeepNulls) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_NULLS.toString(),
+                bulkCopyForBatchInsertKeepNulls);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertKeepNulls() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_NULLS.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_KEEP_NULLS.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertTableLock(boolean bulkCopyForBatchInsertTableLock) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_TABLE_LOCK.toString(),
+                bulkCopyForBatchInsertTableLock);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertTableLock() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_TABLE_LOCK.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_TABLE_LOCK.getDefaultValue());
+    }
+
+    @Override
+    public void setBulkCopyForBatchInsertAllowEncryptedValueModifications(boolean bulkCopyForBatchInsertAllowEncryptedValueModifications) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_ALLOW_ENCRYPTED_VALUE_MODIFICATIONS.toString(),
+                bulkCopyForBatchInsertAllowEncryptedValueModifications);
+    }
+
+    @Override
+    public boolean getBulkCopyForBatchInsertAllowEncryptedValueModifications() {
+        return getBooleanProperty(connectionProps,
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_ALLOW_ENCRYPTED_VALUE_MODIFICATIONS.toString(),
+                SQLServerDriverBooleanProperty.BULK_COPY_FOR_BATCH_INSERT_ALLOW_ENCRYPTED_VALUE_MODIFICATIONS.getDefaultValue());
+    }    
+    /**
+     * @deprecated
+     */
+    @Override
+    @Deprecated(since = "9.3.0", forRemoval = true)
     public void setJASSConfigurationName(String configurationName) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.JAAS_CONFIG_NAME.toString(),
                 configurationName);
     }
 
+    /**
+     * @deprecated
+     */
     @Override
-    @Deprecated
+    @Deprecated(since = "9.3.0", forRemoval = true)
     public String getJASSConfigurationName() {
         return getStringProperty(connectionProps, SQLServerDriverStringProperty.JAAS_CONFIG_NAME.toString(),
                 SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue());
@@ -1007,15 +1147,27 @@ public class SQLServerDataSource
                 SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue());
     }
 
+    @Override
+    public boolean getUseDefaultJaasConfig() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.getDefaultValue());
+    }
+
+    @Override
+    public void setUseDefaultJaasConfig(boolean useDefaultJaasConfig) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                useDefaultJaasConfig);
+    }
+
     /**
-     * This method is deprecated. Use {@link SQLServerDataSource#setUser(String user)} instead.
+     * @deprecated This method is deprecated. Use {@link SQLServerDataSource#setUser(String user)} instead.
      *
-     * Sets the client id to be used to retrieve the access token for a user-assigned Managed Identity.
+     *             Sets the client id to be used to retrieve the access token for a user-assigned Managed Identity.
      *
      * @param managedIdentityClientId
      *        Client ID of the user-assigned Managed Identity.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public void setMSIClientId(String managedIdentityClientId) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.MSI_CLIENT_ID.toString(),
@@ -1023,13 +1175,13 @@ public class SQLServerDataSource
     }
 
     /**
-     * This method is deprecated. Use {@link SQLServerDataSource#getUser()} instead.
+     * @deprecated This method is deprecated. Use {@link SQLServerDataSource#getUser()} instead.
      *
-     * Returns the value for the connection property 'msiClientId'.
+     *             Returns the value for the connection property 'msiClientId'.
      *
      * @return msiClientId property value
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public String getMSIClientId() {
         return getStringProperty(connectionProps, SQLServerDriverStringProperty.MSI_CLIENT_ID.toString(),
@@ -1127,25 +1279,34 @@ public class SQLServerDataSource
         setStringProperty(connectionProps, SQLServerDriverStringProperty.CLIENT_KEY_PASSWORD.toString(), password);
     }
 
+    /**
+     * @deprecated
+     */
     @Override
-    @Deprecated
+    @Deprecated(since = "9.4.1", forRemoval = true)
     public String getAADSecurePrincipalId() {
         return getStringProperty(connectionProps, SQLServerDriverStringProperty.AAD_SECURE_PRINCIPAL_ID.toString(),
                 SQLServerDriverStringProperty.AAD_SECURE_PRINCIPAL_ID.getDefaultValue());
     }
 
+    /**
+     * @deprecated
+     */
     @Override
-    @Deprecated
-    public void setAADSecurePrincipalId(String AADSecurePrincipalId) {
+    @Deprecated(since = "9.4.1", forRemoval = true)
+    public void setAADSecurePrincipalId(String aadSecurePrincipalId) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.AAD_SECURE_PRINCIPAL_ID.toString(),
-                AADSecurePrincipalId);
+                aadSecurePrincipalId);
     }
 
+    /**
+     * @deprecated
+     */
     @Override
-    @Deprecated
-    public void setAADSecurePrincipalSecret(String AADSecurePrincipalSecret) {
+    @Deprecated(since = "9.4.1", forRemoval = true)
+    public void setAADSecurePrincipalSecret(String aadSecurePrincipalSecret) {
         setStringProperty(connectionProps, SQLServerDriverStringProperty.AAD_SECURE_PRINCIPAL_SECRET.toString(),
-                AADSecurePrincipalSecret);
+                aadSecurePrincipalSecret);
     }
 
     @Override
@@ -1207,21 +1368,38 @@ public class SQLServerDataSource
     }
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
-     * This method will always return 0 and is for backwards compatibility only.
+     * @deprecated Time-to-live is no longer supported for the cached Managed Identity tokens.
+     *             This method will always return 0 and is for backwards compatibility only.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public void setMsiTokenCacheTtl(int timeToLive) {}
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
-     * This method is a no-op for backwards compatibility only.
+     * @deprecated Time-to-live is no longer supported for the cached Managed Identity tokens.
+     *             This method is a no-op for backwards compatibility only.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public int getMsiTokenCacheTtl() {
         return 0;
+    }
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed.
+     * This method is a no-op for backwards compatibility only.
+     */
+    @Override
+    public void setUseFlexibleCallableStatements(boolean enable) {}
+
+
+    /**
+     * useFlexibleCallableStatements is temporarily removed.
+     * This method is a no-op for backwards compatibility only.
+     */
+    @Override
+    public boolean getUseFlexibleCallableStatements() {
+        return true;
     }
 
     /**
@@ -1246,6 +1424,95 @@ public class SQLServerDataSource
         return (SQLServerAccessTokenCallback) getObjectProperty(connectionProps,
                 SQLServerDriverObjectProperty.ACCESS_TOKEN_CALLBACK.toString(),
                 SQLServerDriverObjectProperty.ACCESS_TOKEN_CALLBACK.getDefaultValue());
+    }
+
+    /**
+     * Sets 'accessTokenCallbackClass' to the fully qualified class name
+     * of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @param accessTokenCallbackClass
+     *        access token callback class
+     */
+    @Override
+    public void setAccessTokenCallbackClass(String accessTokenCallbackClass) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.ACCESS_TOKEN_CALLBACK_CLASS.toString(),
+                accessTokenCallbackClass);
+    }
+
+    /**
+     * Returns the fully qualified class name of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @return accessTokenCallbackClass
+     */
+    @Override
+    public String getAccessTokenCallbackClass() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.ACCESS_TOKEN_CALLBACK_CLASS.toString(),
+                null);
+    }
+
+    /**
+     * Sets the 'calcBigDecimalPrecision' setting.
+     *
+     * @param calcBigDecimalPrecision
+     *        boolean property to have the driver calculate a big decimal's precision from input
+     */
+    @Override
+    public void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision) {
+        setBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION.toString(),
+                calcBigDecimalPrecision);
+    }
+
+    /**
+     * Returns the value for 'calcBigDecimalPrecision'.
+     *
+     * @return computeBigDecimal boolean value
+     */
+    @Override
+    public boolean getCalcBigDecimalPrecision() {
+        return getBooleanProperty(connectionProps, SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION.toString(),
+                SQLServerDriverBooleanProperty.CALC_BIG_DECIMAL_PRECISION.getDefaultValue());
+    }
+
+    /**
+     * Sets the 'retryExec' setting.
+     *
+     * @param retryExec
+     *        String property giving the custom statement retry rules to use for configurable retry logic
+     */
+    @Override
+    public void setRetryExec(String retryExec) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_EXEC.toString(), retryExec);
+    }
+
+    /**
+     * Returns the value for 'retryExec'.
+     *
+     * @return retryExec String value
+     */
+    @Override
+    public String getRetryExec() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_EXEC.toString(), null);
+    }
+
+    /**
+     * Sets the 'retryConn' setting.
+     *
+     * @param retryConn
+     *        String property giving the custom connection retry rules to use for configurable retry logic
+     */
+    @Override
+    public void setRetryConn(String retryConn) {
+        setStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_CONN.toString(), retryConn);
+    }
+
+    /**
+     * Returns the value for 'retryConn'.
+     *
+     * @return retryConn String value
+     */
+    @Override
+    public String getRetryConn() {
+        return getStringProperty(connectionProps, SQLServerDriverStringProperty.RETRY_CONN.toString(), null);
     }
 
     /**
@@ -1300,7 +1567,7 @@ public class SQLServerDataSource
     private void setIntProperty(Properties props, String propKey, int propValue) {
         if (loggerExternal.isLoggable(java.util.logging.Level.FINER))
             loggerExternal.entering(getClassNameLogging(), "set" + propKey, propValue);
-        props.setProperty(propKey, Integer.valueOf(propValue).toString());
+        props.setProperty(propKey, Integer.toString(propValue));
         loggerExternal.exiting(getClassNameLogging(), "set" + propKey);
     }
 
@@ -1457,7 +1724,7 @@ public class SQLServerDataSource
             ref.add(new StringRefAddr("class", dataSourceClassString));
 
         if (trustStorePasswordStripped)
-            ref.add(new StringRefAddr("trustStorePasswordStripped", "true"));
+            ref.add(new StringRefAddr(TRUSTSTORE_PASSWORD_STRIPPED, "true"));
 
         // Add each property name+value pair found in connectionProps.
         Enumeration<?> e = connectionProps.keys();
@@ -1469,7 +1736,7 @@ public class SQLServerDataSource
                 // The property set and the variable set at the same time is not
                 // possible
                 assert !trustStorePasswordStripped;
-                ref.add(new StringRefAddr("trustStorePasswordStripped", "true"));
+                ref.add(new StringRefAddr(TRUSTSTORE_PASSWORD_STRIPPED, "true"));
             } else {
                 // do not add passwords to the collection. we have normal
                 // password
@@ -1509,7 +1776,7 @@ public class SQLServerDataSource
                 dataSourceURL = propertyValue;
             } else if ("dataSourceDescription".equals(propertyName)) {
                 dataSourceDescription = propertyValue;
-            } else if ("trustStorePasswordStripped".equals(propertyName)) {
+            } else if (TRUSTSTORE_PASSWORD_STRIPPED.equals(propertyName)) {
                 trustStorePasswordStripped = true;
             }
             // Just skip "class" StringRefAddr, it does not go into

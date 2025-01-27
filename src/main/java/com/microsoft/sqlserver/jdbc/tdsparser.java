@@ -13,6 +13,11 @@ import java.util.logging.Logger;
  * The top level TDS parser class.
  */
 final class TDSParser {
+
+    private TDSParser() {
+        throw new UnsupportedOperationException(SQLServerException.getErrString("R_notSupported"));
+    }
+
     /** TDS protocol diagnostics logger */
     private static Logger logger = Logger.getLogger("com.microsoft.sqlserver.jdbc.internals.TDS.TOKEN");
 
@@ -64,7 +69,6 @@ final class TDSParser {
                         + ((-1 == tdsTokenType) ? "EOF" : TDS.getTokenName(tdsTokenType)));
             }
             if (readOnlyWarningsFlag && TDS.TDS_MSG != tdsTokenType) {
-                parsing = false;
                 return;
             }
             switch (tdsTokenType) {
@@ -193,6 +197,14 @@ class TDSTokenHandler {
         return databaseError;
     }
 
+    public void addDatabaseError(SQLServerError databaseError) {
+        if (this.databaseError == null) {
+            this.databaseError = databaseError;
+        } else {
+            this.databaseError.addError(databaseError);
+        }
+    }
+
     TDSTokenHandler(String logContext) {
         this.logContext = logContext;
     }
@@ -243,12 +255,28 @@ class TDSTokenHandler {
     }
 
     boolean onError(TDSReader tdsReader) throws SQLServerException {
-        if (null == databaseError) {
-            databaseError = new SQLServerError();
-            databaseError.setFromTDS(tdsReader);
-        } else {
-            (new SQLServerError()).setFromTDS(tdsReader);
+        SQLServerError tmpDatabaseError = new SQLServerError();
+        tmpDatabaseError.setFromTDS(tdsReader);
+
+        ISQLServerMessageHandler msgHandler = tdsReader.getConnection().getServerMessageHandler();
+        if (msgHandler != null) {
+            // Let the message handler decide if the error should be unchanged/down-graded or ignored
+            ISQLServerMessage srvMessage = msgHandler.messageHandler(tmpDatabaseError);
+
+            // Ignored
+            if (srvMessage == null) {
+                return true;
+            }
+
+            // Down-graded to a SQLWarning
+            if (srvMessage.isInfoMessage()) {
+                tdsReader.getConnection().addWarning(srvMessage);
+                return true;
+            }
         }
+
+        // set/add the database error
+        addDatabaseError(tmpDatabaseError);
 
         return true;
     }
@@ -265,11 +293,12 @@ class TDSTokenHandler {
 
     boolean onColMetaData(TDSReader tdsReader) throws SQLServerException {
         /*
-         * SHOWPLAN or something else that produces extra metadata might be ON. instead of throwing an exception, warn
-         * and discard the column meta data
+         * SHOWPLAN or something else that produces extra metadata might be ON. Log info instead of throwing an exception, warn
+         * and discard the extra column meta data
          */
-        if (logger.isLoggable(Level.WARNING))
-            logger.warning(tdsReader.toString() + ": " + logContext + ": Discarding unexpected "
+        if (logger.isLoggable(Level.INFO))
+            logger.info(tdsReader.toString() + ": " + logContext
+                    + ": Discarding extra metadata which can be a result of SHOWPLAN settings:  "
                     + TDS.getTokenName(tdsReader.peekTokenType()));
         (new StreamColumns(false)).setFromTDS(tdsReader);
         return false;

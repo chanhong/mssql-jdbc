@@ -5,8 +5,8 @@
 
 package com.microsoft.sqlserver.jdbc;
 
-import java.security.AccessControlContext;
-import java.security.AccessController;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.text.MessageFormat;
@@ -26,7 +26,7 @@ import org.ietf.jgss.Oid;
 
 
 /**
- * KerbAuthentication for int auth.
+ * KerbAuthentication for integrated authentication.
  */
 final class KerbAuthentication extends SSPIAuthentication {
     private static final java.util.logging.Logger authLogger = java.util.logging.Logger
@@ -39,6 +39,7 @@ final class KerbAuthentication extends SSPIAuthentication {
     private LoginContext lc = null;
     private boolean isUserCreatedCredential = false;
     private GSSCredential peerCredentials = null;
+    private boolean useDefaultNativeGSSCredential = false;
     private GSSContext peerContext = null;
 
     static {
@@ -47,7 +48,13 @@ final class KerbAuthentication extends SSPIAuthentication {
         Configuration.setConfiguration(new JaasConfiguration(Configuration.getConfiguration()));
     }
 
-    private void intAuthInit() throws SQLServerException {
+    /**
+     * Initializes the Kerberos client security context
+     * 
+     * @throws SQLServerException
+     */
+    @SuppressWarnings("deprecation")
+    private void initAuthInit() throws SQLServerException {
         try {
             // If we need to support NTLM as well, we can use null
             // Kerberos OID
@@ -56,6 +63,11 @@ final class KerbAuthentication extends SSPIAuthentication {
             // We pass null to indicate that the system should interpret the SPN
             // as it is.
             GSSName remotePeerName = manager.createName(spn, null);
+
+            if (useDefaultNativeGSSCredential) {
+                peerCredentials = manager.createCredential(null, GSSCredential.DEFAULT_LIFETIME, kerberos,
+                        GSSCredential.INITIATE_ONLY);
+            }
 
             if (null != peerCredentials) {
                 peerContext = manager.createContext(remotePeerName, kerberos, peerCredentials,
@@ -67,13 +79,45 @@ final class KerbAuthentication extends SSPIAuthentication {
                 String configName = con.activeConnectionProperties.getProperty(
                         SQLServerDriverStringProperty.JAAS_CONFIG_NAME.toString(),
                         SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue());
+                boolean useDefaultJaas = Boolean.parseBoolean(con.activeConnectionProperties.getProperty(
+                        SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.toString(),
+                        Boolean.toString(SQLServerDriverBooleanProperty.USE_DEFAULT_JAAS_CONFIG.getDefaultValue())));
+
+                if (!configName.equals(SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue())
+                        && useDefaultJaas) {
+                    // Reset configName to default -- useDefaultJaas setting takes priority over jaasConfigName
+                    if (authLogger.isLoggable(Level.WARNING)) {
+                        authLogger.warning(toString()
+                                + String.format("Using default JAAS configuration, configured %s=%s will not be used.",
+                                        SQLServerDriverStringProperty.JAAS_CONFIG_NAME, configName));
+                    }
+                    configName = SQLServerDriverStringProperty.JAAS_CONFIG_NAME.getDefaultValue();
+                }
                 Subject currentSubject;
                 KerbCallback callback = new KerbCallback(con);
                 try {
-                    AccessControlContext context = AccessController.getContext();
-                    currentSubject = Subject.getSubject(context);
+
+                    try {
+                        java.security.AccessControlContext context = java.security.AccessController.getContext();
+                        currentSubject = Subject.getSubject(context);
+
+                    } catch (UnsupportedOperationException ue) {
+                        if (authLogger.isLoggable(Level.FINE)) {
+                            authLogger.fine("JDK version does not support Subject.getSubject(), " +
+                                    "falling back to Subject.current() : " + ue.getMessage());
+                        }
+
+                        Method current = Subject.class.getDeclaredMethod("current");
+                        current.setAccessible(true);
+                        currentSubject = (Subject) current.invoke(null);
+                    }
+
                     if (null == currentSubject) {
-                        lc = new LoginContext(configName, callback);
+                        if (useDefaultJaas) {
+                            lc = new LoginContext(configName, null, callback, new JaasConfiguration(null));
+                        } else {
+                            lc = new LoginContext(configName, callback);
+                        }
                         lc.login();
                         // per documentation LoginContext will instantiate a new subject.
                         currentSubject = lc.getSubject();
@@ -107,12 +151,13 @@ final class KerbAuthentication extends SSPIAuthentication {
                     authLogger.finer(toString() + " Getting client credentials");
                 }
                 peerCredentials = getClientCredential(currentSubject, manager, kerberos);
+
                 if (authLogger.isLoggable(Level.FINER)) {
                     authLogger.finer(toString() + " creating security context");
                 }
-
                 peerContext = manager.createContext(remotePeerName, kerberos, peerCredentials,
                         GSSContext.DEFAULT_LIFETIME);
+
                 // The following flags should be inline with our native implementation.
                 peerContext.requestCredDeleg(true);
                 peerContext.requestMutualAuth(true);
@@ -130,8 +175,13 @@ final class KerbAuthentication extends SSPIAuthentication {
             }
             con.terminate(SQLServerException.DRIVER_ERROR_NONE,
                     SQLServerException.getErrString("R_integratedAuthenticationFailed"), ge);
+        } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
+            if (authLogger.isLoggable(Level.FINER)) {
+                authLogger.finer(toString() + "initAuthInit failed reflection exception:-" + ex);
+            }
+            con.terminate(SQLServerException.DRIVER_ERROR_NONE,
+                    SQLServerException.getErrString("R_integratedAuthenticationFailed"), ex);
         }
-
     }
 
     // We have to do a privileged action to create the credential of the user in the current context
@@ -150,7 +200,7 @@ final class KerbAuthentication extends SSPIAuthentication {
         return (GSSCredential) credential;
     }
 
-    private byte[] intAuthHandShake(byte[] pin, boolean[] done) throws SQLServerException {
+    private byte[] initAuthHandShake(byte[] pin, boolean[] done) throws SQLServerException {
         try {
             if (authLogger.isLoggable(Level.FINER)) {
                 authLogger.finer(toString() + " Sending token to server over secure context");
@@ -196,24 +246,25 @@ final class KerbAuthentication extends SSPIAuthentication {
      * @param impersonatedUserCred
      */
     KerbAuthentication(SQLServerConnection con, String address, int port, GSSCredential impersonatedUserCred,
-            boolean isUserCreated) {
+            boolean isUserCreated, boolean useDefaultNativeGSSCredential) {
         this(con, address, port);
         this.peerCredentials = impersonatedUserCred;
         this.isUserCreatedCredential = isUserCreated;
+        this.useDefaultNativeGSSCredential = useDefaultNativeGSSCredential;
     }
 
     byte[] generateClientContext(byte[] pin, boolean[] done) throws SQLServerException {
         if (null == peerContext) {
-            intAuthInit();
+            initAuthInit();
         }
-        return intAuthHandShake(pin, done);
+        return initAuthHandShake(pin, done);
     }
 
     void releaseClientContext() {
         try {
-            if (null != peerCredentials && !isUserCreatedCredential) {
+            if (null != peerCredentials && !isUserCreatedCredential && !useDefaultNativeGSSCredential) {
                 peerCredentials.dispose();
-            } else if (null != peerCredentials && isUserCreatedCredential) {
+            } else if (null != peerCredentials && (isUserCreatedCredential || useDefaultNativeGSSCredential)) {
                 peerCredentials = null;
             }
             if (null != peerContext) {

@@ -5,6 +5,8 @@
 
 package microsoft.sql;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Calendar;
 import java.util.Locale;
 import java.util.TimeZone;
@@ -73,6 +75,22 @@ public final class DateTimeOffset implements java.io.Serializable, java.lang.Com
     }
 
     /**
+     * Constructs a DateTimeOffset from an existing java.time.OffsetDateTime
+     * DateTimeOffset represents values to 100 nanosecond precision. If the java.time.OffsetDateTime instance
+     * represents a value that is more precise, the value is rounded to the nearest multiple of 100 nanoseconds. Values
+     * within 50 nanoseconds of the next second are rounded up to the next second.
+     *
+     * @param offsetDateTime
+     *        A java.time.OffsetDateTime value
+     */
+    private DateTimeOffset(java.time.OffsetDateTime offsetDateTime) {
+        int hundredNanos = ((offsetDateTime.getNano() + 50) / 100);
+        this.utcMillis = (offsetDateTime.toEpochSecond() * 1000) + (hundredNanos / HUNDRED_NANOS_PER_SECOND * 1000);
+        this.nanos = 100 * (hundredNanos % HUNDRED_NANOS_PER_SECOND);
+        this.minutesOffset = offsetDateTime.getOffset().getTotalSeconds() / 60;
+    }
+
+    /**
      * Converts a java.sql.Timestamp value with an integer offset to the equivalent DateTimeOffset value
      * 
      * @param timestamp
@@ -103,6 +121,20 @@ public final class DateTimeOffset implements java.io.Serializable, java.lang.Com
 
         return new DateTimeOffset(timestamp,
                 (calendar.get(Calendar.ZONE_OFFSET) + calendar.get(Calendar.DST_OFFSET)) / (60 * 1000));
+    }
+
+    /**
+     * Directly converts a {@link java.time.OffsetDateTime} value to an equivalent {@link DateTimeOffset} value
+     * DateTimeOffset represents values to 100 nanosecond precision. If the java.time.OffsetDateTime instance
+     * represents a value that is more precise, the value is rounded to the nearest multiple of 100 nanoseconds. Values
+     * within 50 nanoseconds of the next second are rounded up to the next second.
+     *
+     * @param offsetDateTime
+     *        A java.time.OffsetDateTime value
+     * @return The DateTimeOffset value of the input java.time.OffsetDateTime
+     */
+    public static DateTimeOffset valueOf(java.time.OffsetDateTime offsetDateTime) {
+        return new DateTimeOffset(offsetDateTime);
     }
 
     /** formatted value */
@@ -160,7 +192,6 @@ public final class DateTimeOffset implements java.io.Serializable, java.lang.Com
                                                                    .substring(2), // -> "123456"
                                                            formattedOffset);
         }
-
         return result;
     }
 
@@ -227,12 +258,32 @@ public final class DateTimeOffset implements java.io.Serializable, java.lang.Com
      * @return OffsetDateTime equivalent to this DateTimeOffset object.
      */
     public java.time.OffsetDateTime getOffsetDateTime() {
-        java.time.ZoneOffset zoneOffset = java.time.ZoneOffset.ofTotalSeconds(60 * minutesOffset);
-        java.time.LocalDateTime localDateTime = java.time.LocalDateTime.ofEpochSecond(utcMillis / 1000, nanos,
-                zoneOffset);
-        return java.time.OffsetDateTime.of(localDateTime, zoneOffset);
-    }
+        // Format the offset as +hh:mm or -hh:mm. Zero offset is formatted as +00:00.
+        String formattedOffset = (minutesOffset < 0) ?
+                String.format(Locale.US, "-%1$02d:%2$02d", -minutesOffset / 60, -minutesOffset % 60) :
+                    String.format(Locale.US, "+%1$02d:%2$02d", minutesOffset / 60, minutesOffset % 60);
 
+        // Create a Calendar instance with the time zone set to GMT plus the formatted offset
+        Calendar calendar = Calendar.getInstance(TimeZone.getTimeZone("GMT" + formattedOffset), Locale.US);
+        // Initialize the calendar with the UTC milliseconds value
+        calendar.setTimeInMillis(utcMillis);
+
+        // Extract the date and time components from the calendar
+        int year = calendar.get(Calendar.YEAR);
+        int month = calendar.get(Calendar.MONTH) + 1; // Calendar.MONTH is zero-based
+        int day = calendar.get(Calendar.DAY_OF_MONTH);
+        int hour = calendar.get(Calendar.HOUR_OF_DAY);
+        int minute = calendar.get(Calendar.MINUTE);
+        int second = calendar.get(Calendar.SECOND);
+
+        // Create the ZoneOffset from the minutesOffset
+        ZoneOffset offset = ZoneOffset.ofTotalSeconds(minutesOffset * 60);
+
+        // Create and return the OffsetDateTime
+        return OffsetDateTime.of(year, month, day, hour, minute, second, nanos, offset);
+    }
+    
+    
     /**
      * Returns this DateTimeOffset object's offset value.
      *
@@ -258,8 +309,9 @@ public final class DateTimeOffset implements java.io.Serializable, java.lang.Com
 
         // The fact that nanos are non-negative guarantees the subtraction at the end
         // cannot produce a signed value outside the range representable in an int.
-        assert nanos >= 0;
-        assert other.nanos >= 0;
+        if (other.nanos < 0) {
+            throw new IllegalArgumentException();
+        }
 
         return (utcMillis > other.utcMillis) ? 1 : (utcMillis < other.utcMillis) ? -1 : nanos - other.nanos;
     }

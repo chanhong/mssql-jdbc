@@ -12,6 +12,7 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.StackOverflowError;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -65,6 +66,8 @@ public class BulkCopyCSVTest extends AbstractTest {
     static String inputFile = "BulkCopyCSVTestInput.csv";
     static String inputFileNoColumnName = "BulkCopyCSVTestInputNoColumnName.csv";
     static String inputFileDelimiterEscape = "BulkCopyCSVTestInputDelimiterEscape.csv";
+    static String inputFileDelimiterEscapeNoNewLineAtEnd = "BulkCopyCSVTestInputDelimiterEscapeNoNewLineAtEnd.csv";
+    static String inputFileMultipleDoubleQuotes = "BulkCopyCSVTestInputMultipleDoubleQuotes.csv";
     static String encoding = "UTF-8";
     static String delimiter = ",";
 
@@ -153,7 +156,7 @@ public class BulkCopyCSVTest extends AbstractTest {
         /*
          * The list below is the copy of inputFileDelimiterEsc ape with quotes removed.
          */
-        String[][] expectedEscaped = new String[11][4];
+        String[][] expectedEscaped = new String[12][4];
         expectedEscaped[0] = new String[] {"test", " test\"", "no@split", " testNoQuote", ""};
         expectedEscaped[1] = new String[] {null, null, null, null, ""};
         expectedEscaped[2] = new String[] {"\"", "test\"test", "test@\"  test", null, ""};
@@ -166,6 +169,8 @@ public class BulkCopyCSVTest extends AbstractTest {
         expectedEscaped[8] = new String[] {"1997", "Ford", "E350", "Super@ \"luxurious\" truck", ""};
         expectedEscaped[9] = new String[] {"1997", "Ford", "E350", "E63", ""};
         expectedEscaped[10] = new String[] {"1997", "Ford", "E350", " Super luxurious truck ", ""};
+        expectedEscaped[11] = new String[] {"1997", "F\r\no\r\nr\r\nd", "E350", "\"Super\" \"luxurious\" \"truck\"",
+                ""};
 
         try (Connection con = getConnection(); Statement stmt = con.createStatement();
                 SQLServerBulkCopy bulkCopy = new SQLServerBulkCopy(con);
@@ -193,12 +198,70 @@ public class BulkCopyCSVTest extends AbstractTest {
                     assertEquals(expectedEscaped[i][3], rs.getString("c4"));
                     i++;
                 }
+                assertEquals(i, 12, "Expected to load 12 records, but loaded " + i + " records");
             }
 
             TestUtils.dropTableIfExists(tableName, stmt);
         }
     }
 
+    @Test
+    @DisplayName("Test setEscapeColumnDelimitersCSVNoNewLineAtEnd")
+    public void testEscapeColumnDelimitersCSVNoNewLineAtEnd() throws Exception {
+        String tableName = AbstractSQLGenerator.escapeIdentifier(RandomUtil.getIdentifier("BulkEscape"));
+        String fileName = filePath + inputFileDelimiterEscapeNoNewLineAtEnd;
+        /*
+         * The list below is the copy of inputFileDelimiterEsc ape with quotes removed.
+         */
+        String[][] expectedEscaped = new String[12][4];
+        expectedEscaped[0] = new String[] {"test", " test\"", "no@split", " testNoQuote", ""};
+        expectedEscaped[1] = new String[] {null, null, null, null, ""};
+        expectedEscaped[2] = new String[] {"\"", "test\"test", "test@\"  test", null, ""};
+        expectedEscaped[3] = new String[] {"testNoQuote  ", " testSpaceAround ", " testSpaceInside ",
+                "  testSpaceQuote\" ", ""};
+        expectedEscaped[4] = new String[] {null, null, null, " testSpaceInside ", ""};
+        expectedEscaped[5] = new String[] {"1997", "Ford", "E350", "E63", ""};
+        expectedEscaped[6] = new String[] {"1997", "Ford", "E350", "E63", ""};
+        expectedEscaped[7] = new String[] {"1997", "Ford", "E350", "Super@ luxurious truck", ""};
+        expectedEscaped[8] = new String[] {"1997", "Ford", "E350", "Super@ \"luxurious\" truck", ""};
+        expectedEscaped[9] = new String[] {"1997", "Ford", "E350", "E63", ""};
+        expectedEscaped[10] = new String[] {"1997", "Ford", "E350", " Super luxurious truck ", ""};
+        expectedEscaped[11] = new String[] {"1997", "F\r\no\r\nr\r\nd", "E350", "\"Super\" \"luxurious\" \"truck\"",
+                ""};
+
+        try (Connection con = getConnection(); Statement stmt = con.createStatement();
+                SQLServerBulkCopy bulkCopy = new SQLServerBulkCopy(con);
+                SQLServerBulkCSVFileRecord fileRecord = new SQLServerBulkCSVFileRecord(fileName, encoding, "@",
+                        false)) {
+            bulkCopy.setDestinationTableName(tableName);
+            fileRecord.setEscapeColumnDelimitersCSV(true);
+            fileRecord.addColumnMetadata(1, null, java.sql.Types.INTEGER, 0, 0);
+            fileRecord.addColumnMetadata(2, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(3, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(4, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(5, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(6, null, java.sql.Types.VARCHAR, 50, 0);
+            stmt.executeUpdate("CREATE TABLE " + tableName
+                    + " (id INT IDENTITY(1,1), c1 VARCHAR(50), c2 VARCHAR(50), c3 VARCHAR(50), c4 VARCHAR(50), c5 VARCHAR(50))");
+            bulkCopy.writeToServer(fileRecord);
+
+            int i = 0;
+            try (ResultSet rs = stmt.executeQuery("SELECT * FROM " + tableName + " ORDER BY id");
+                    BufferedReader br = new BufferedReader(new FileReader(fileName));) {
+                while (rs.next()) {
+                    assertEquals(expectedEscaped[i][0], rs.getString("c1"));
+                    assertEquals(expectedEscaped[i][1], rs.getString("c2"));
+                    assertEquals(expectedEscaped[i][2], rs.getString("c3"));
+                    assertEquals(expectedEscaped[i][3], rs.getString("c4"));
+                    i++;
+                }
+                assertEquals(i, 12, "Expected to load 12 records, but loaded " + i + " records");
+            } finally {
+                TestUtils.dropTableIfExists(tableName, stmt);
+            }
+        }
+    }
+    
     /**
      * test simple csv file for bulkcopy, for GitHub issue 1391 Tests to ensure that the set returned by
      * getColumnOrdinals doesn't have to be ordered
@@ -332,6 +395,54 @@ public class BulkCopyCSVTest extends AbstractTest {
             }
         } catch (Exception e) {
             fail("CSV validation failed with " + e.getMessage());
+        }
+    }
+
+    /**
+     * Test simple csv file for bulkcopy, for GitHub issue 2400. Tests to ensure that recursion in the CSV
+     * parsing does not blow the default Java stack
+     * Success is if there is no exception when parsing the CSV file in bulkCopy.writeToServer()
+     */
+    @Test
+    @DisplayName("Test SQLServerBulkCSVFileRecord GitHb 2400")
+    public void testCSV2400() {
+        String tableName = AbstractSQLGenerator.escapeIdentifier(RandomUtil.getIdentifier("BulkEscape"));
+        String fileName = filePath + inputFileMultipleDoubleQuotes;
+
+        try (Connection con = getConnection(); Statement stmt = con.createStatement();
+                SQLServerBulkCopy bulkCopy = new SQLServerBulkCopy(con);
+                SQLServerBulkCSVFileRecord fileRecord = new SQLServerBulkCSVFileRecord(fileName, encoding, ",",
+                        false)) {
+            bulkCopy.setDestinationTableName(tableName);
+            fileRecord.setEscapeColumnDelimitersCSV(true);
+            fileRecord.addColumnMetadata(1, null, java.sql.Types.INTEGER, 0, 0);
+            fileRecord.addColumnMetadata(2, null, java.sql.Types.VARCHAR, 1, 0);
+            fileRecord.addColumnMetadata(3, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(4, null, java.sql.Types.VARCHAR, 200, 0);
+            fileRecord.addColumnMetadata(5, null, java.sql.Types.VARCHAR, 1000, 0);
+            fileRecord.addColumnMetadata(6, null, java.sql.Types.VARCHAR, 4000, 0);
+            fileRecord.addColumnMetadata(7, null, java.sql.Types.VARCHAR, 8000, 0);
+            fileRecord.addColumnMetadata(8, null, java.sql.Types.VARCHAR, 8000, 0);
+            fileRecord.addColumnMetadata(9, null, java.sql.Types.VARCHAR, 1, 0);
+            fileRecord.addColumnMetadata(10, null, java.sql.Types.VARCHAR, 50, 0);
+            fileRecord.addColumnMetadata(11, null, java.sql.Types.VARCHAR, 200, 0);
+            fileRecord.addColumnMetadata(12, null, java.sql.Types.VARCHAR, 1000, 0);
+            fileRecord.addColumnMetadata(13, null, java.sql.Types.VARCHAR, 4000, 0);
+            fileRecord.addColumnMetadata(14, null, java.sql.Types.VARCHAR, 8000, 0);
+            fileRecord.addColumnMetadata(15, null, java.sql.Types.VARCHAR, 8000, 0);
+
+            stmt.executeUpdate("CREATE TABLE " + tableName
+                    + " (C1 INT, C2 VARCHAR(1), C3 VARCHAR(50), C4 VARCHAR(200), C5 VARCHAR(1000), C6 VARCHAR(4000),"
+                    + " C7 VARCHAR(8000), C8 VARCHAR(8000), C9 VARCHAR(1), C10 VARCHAR(50), C11 VARCHAR(200), C12 VARCHAR(1000),"
+                    + " C13 VARCHAR(4000), C14 VARCHAR(8000), C15 VARCHAR(8000))");
+
+            bulkCopy.writeToServer(fileRecord);
+
+            TestUtils.dropTableIfExists(tableName, stmt);
+        } catch (StackOverflowError e) {
+            fail("Stack overflow: " + e.getMessage());
+        } catch (SQLException e) {
+            fail("SQL exception: " + e.getMessage());
         }
     }
 

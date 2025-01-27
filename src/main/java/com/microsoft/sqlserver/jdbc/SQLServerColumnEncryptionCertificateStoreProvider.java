@@ -6,6 +6,8 @@
 package com.microsoft.sqlserver.jdbc;
 
 import java.util.Locale;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 
 /**
@@ -17,21 +19,13 @@ public final class SQLServerColumnEncryptionCertificateStoreProvider extends SQL
     static final private java.util.logging.Logger windowsCertificateStoreLogger = java.util.logging.Logger
             .getLogger("com.microsoft.sqlserver.jdbc.SQLServerColumnEncryptionCertificateStoreProvider");
 
-    static boolean isWindows;
-
     String name = "MSSQL_CERTIFICATE_STORE";
 
-    static final String localMachineDirectory = "LocalMachine";
-    static final String currentUserDirectory = "CurrentUser";
-    static final String myCertificateStore = "My";
+    static final String LOCAL_MACHINE_DIRECTORY = "LocalMachine";
+    static final String CURRENT_USER_DIRECTORY = "CurrentUser";
+    static final String MY_CERTIFICATE_STORE = "My";
 
-    static {
-        if (System.getProperty("os.name").toLowerCase(Locale.ENGLISH).startsWith("windows")) {
-            isWindows = true;
-        } else {
-            isWindows = false;
-        }
-    }
+    private static final Lock lock = new ReentrantLock();
 
     /**
      * Constructs a SQLServerColumnEncryptionCertificateStoreProvider.
@@ -49,29 +43,21 @@ public final class SQLServerColumnEncryptionCertificateStoreProvider extends SQL
         return this.name;
     }
 
+    @Override
     public byte[] encryptColumnEncryptionKey(String masterKeyPath, String encryptionAlgorithm,
             byte[] plainTextColumnEncryptionKey) throws SQLServerException {
+        // not supported
         throw new SQLServerException(null,
                 SQLServerException.getErrString("R_InvalidWindowsCertificateStoreEncryption"), null, 0, false);
     }
 
-    private byte[] decryptColumnEncryptionKeyWindows(String masterKeyPath, String encryptionAlgorithm,
-            byte[] encryptedColumnEncryptionKey) throws SQLServerException {
-        try {
-            return AuthenticationJNI.DecryptColumnEncryptionKey(masterKeyPath, encryptionAlgorithm,
-                    encryptedColumnEncryptionKey);
-        } catch (DLLException e) {
-            DLLException.buildException(e.GetErrCode(), e.GetParam1(), e.GetParam2(), e.GetParam3());
-            return null;
-        }
-    }
-
+    @Override
     public byte[] decryptColumnEncryptionKey(String masterKeyPath, String encryptionAlgorithm,
             byte[] encryptedColumnEncryptionKey) throws SQLServerException {
         windowsCertificateStoreLogger.entering(SQLServerColumnEncryptionCertificateStoreProvider.class.getName(),
                 "decryptColumnEncryptionKey", "Decrypting Column Encryption Key.");
         byte[] plainCek;
-        if (isWindows) {
+        if (SQLServerConnection.isWindows) {
             plainCek = decryptColumnEncryptionKeyWindows(masterKeyPath, encryptionAlgorithm,
                     encryptedColumnEncryptionKey);
         } else {
@@ -86,10 +72,30 @@ public final class SQLServerColumnEncryptionCertificateStoreProvider extends SQL
     public boolean verifyColumnMasterKeyMetadata(String masterKeyPath, boolean allowEnclaveComputations,
             byte[] signature) throws SQLServerException {
         try {
+            lock.lock();
+
             return AuthenticationJNI.VerifyColumnMasterKeyMetadata(masterKeyPath, allowEnclaveComputations, signature);
         } catch (DLLException e) {
-            DLLException.buildException(e.GetErrCode(), e.GetParam1(), e.GetParam2(), e.GetParam3());
+            DLLException.buildException(e.getErrCode(), e.getParam1(), e.getParam2(), e.getParam3());
             return false;
+        } finally {
+            lock.unlock();
         }
     }
+
+    private byte[] decryptColumnEncryptionKeyWindows(String masterKeyPath, String encryptionAlgorithm,
+            byte[] encryptedColumnEncryptionKey) throws SQLServerException {
+        try {
+            lock.lock();
+
+            return AuthenticationJNI.DecryptColumnEncryptionKey(masterKeyPath, encryptionAlgorithm,
+                    encryptedColumnEncryptionKey);
+        } catch (DLLException e) {
+            DLLException.buildException(e.getErrCode(), e.getParam1(), e.getParam2(), e.getParam3());
+            return null;
+        } finally {
+            lock.unlock();
+        }
+    }
+
 }

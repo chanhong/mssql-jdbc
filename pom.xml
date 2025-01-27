@@ -3,42 +3,33 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-
 	<groupId>com.microsoft.sqlserver</groupId>
 	<artifactId>mssql-jdbc</artifactId>
-	<version>12.2.0-SNAPSHOT</version>
+	<version>12.9.0</version>
 	<packaging>jar</packaging>
-
 	<name>Microsoft JDBC Driver for SQL Server</name>
-
 	<description>
 		Microsoft JDBC Driver for SQL Server.
 	</description>
-
 	<url>https://github.com/Microsoft/mssql-jdbc</url>
-
 	<licenses>
 		<license>
 			<name>MIT License</name>
 			<url>http://www.opensource.org/licenses/mit-license.php</url>
 		</license>
 	</licenses>
-
 	<organization>
 		<name>Microsoft Corporation</name>
 	</organization>
-
 	<developers>
 		<developer>
 			<organization>Microsoft</organization>
 			<organizationUrl>http://www.microsoft.com</organizationUrl>
 		</developer>
 	</developers>
-
 	<scm>
 		<url>https://github.com/Microsoft/mssql-jdbc</url>
 	</scm>
-
 	<properties>
 		<!-- Allowed values for excluded Groups here - - - - - - - - - - - - - 
 			xJDBC42 - - - - - - For tests not compatible with JDBC 42 Specifications 
@@ -47,31 +38,30 @@
 			xSQLv12 - - - - - - For tests not compatible with SQL Server 2008 R2 - 2014 
 			xSQLv14 - - - - - - For tests not compatible with SQL Server 2016 - 2017 
 			xSQLv15 - - - - - - For tests not compatible with SQL Server 2019 - - - - 
+			xSQLv16 - - - - - - For tests not compatible with SQL Server 2022 - - - - 
 			xAzureSQLDB - - - - For tests not compatible with Azure SQL Database - - 
 			xAzureSQLDW - - - - For tests not compatible with Azure Data Warehouse - 
 			xAzureSQLMI - - - - For tests not compatible with Azure SQL Managed Instance 
-			NTLM - - - - - - For tests using NTLM Authentication mode (excluded by default) 
-			reqExternalSetup - For tests requiring external setup (excluded by default) 
+			NTLM  - - - - - - - For tests using NTLM Authentication mode (excluded by default)
+			kerberos  - - - - - For tests using Kerberos authentication (excluded by default)
+			reqExternalSetup - For tests requiring external setup (excluded by default)
 			clientCertAuth - - For tests requiring client certificate authentication 
 			setup (excluded by default) - - - - - - - - - - - - - - - - - - - - - - - 
 			- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 			Default testing enabled with SQL Server 2019 (SQLv15) -->
-		<excludedGroups>xSQLv12,xSQLv15,NTLM,MSI,reqExternalSetup,clientCertAuth,fedAuth</excludedGroups>
-
+		<excludedGroups>xSQLv12,xSQLv15,NTLM,MSI,reqExternalSetup,clientCertAuth,fedAuth,kerberos</excludedGroups>
 		<!-- Use -preview for preview release, leave empty for official release. -->
 		<releaseExt>-preview</releaseExt>
-
 		<!-- Driver Dependencies -->
 		<org.osgi.core.version>6.0.0</org.osgi.core.version>
-		<azure-security-keyvault-keys.version>4.5.1</azure-security-keyvault-keys.version>
-		<azure-identity.version>1.7.0-beta.2</azure-identity.version>
-		<msal.version>1.13.3</msal.version>
-		<org.osgi.compendium.version>5.0.0</org.osgi.compendium.version>
+		<azure-security-keyvault-keys.version>4.7.3</azure-security-keyvault-keys.version>
+		<azure-identity.version>1.12.2</azure-identity.version>
+		<msal.version>1.15.1</msal.version>
+		<osgi.jdbc.version>1.1.0</osgi.jdbc.version>
 		<antlr-runtime.version>4.9.3</antlr-runtime.version>
-		<com.google.code.gson.version>2.9.0</com.google.code.gson.version>
-		<bcprov-jdk15on.version>1.70</bcprov-jdk15on.version>
-		<bcpkix-jdk15on.version>1.70</bcpkix-jdk15on.version>
-
+		<com.google.code.gson.version>2.10.1</com.google.code.gson.version>
+		<bcprov-jdk18on.version>1.78</bcprov-jdk18on.version>
+		<bcpkix-jdk18on.version>1.78</bcpkix-jdk18on.version>
 		<!-- JUnit Test Dependencies -->
 		<junit.platform.version>[1.3.2, 1.9.0]</junit.platform.version>
 		<junit.jupiter.version>5.8.2</junit.jupiter.version>
@@ -79,13 +69,11 @@
 		<dbcp2.version>2.7.0</dbcp2.version>
 		<slf4j.nop.version>1.7.30</slf4j.nop.version>
 		<gemini.mock.version>2.1.0.RELEASE</gemini.mock.version>
-		<h2.version>2.1.210</h2.version>
-
+		<h2.version>2.2.220</h2.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>${project.build.sourceEncoding}</project.reporting.outputEncoding>
 		<enforcer.skip>false</enforcer.skip>
 	</properties>
-
 	<dependencies>
 		<dependency>
 			<groupId>com.azure</groupId>
@@ -105,14 +93,12 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
-
 		<dependency>
 			<groupId>com.microsoft.azure</groupId>
 			<artifactId>msal4j</artifactId>
-			<version>1.13.3</version>
+			<version>${msal.version}</version>
 			<optional>true</optional>
 		</dependency>
-
 		<!-- dependencies for ANTLR -->
 		<dependency>
 			<groupId>org.antlr</groupId>
@@ -120,7 +106,6 @@
 			<version>${antlr-runtime.version}</version>
 			<optional>true</optional>
 		</dependency>
-
 		<!-- dependencies for AAS Enclave Provider -->
 		<dependency>
 			<groupId>com.google.code.gson</groupId>
@@ -130,15 +115,15 @@
 		</dependency>
 		<dependency>
 			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcprov-jdk15on</artifactId>
-			<version>${bcprov-jdk15on.version}</version>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>${bcprov-jdk18on.version}</version>
 			<optional>true</optional>
 		</dependency>
 		<!-- dependencies for Client Certificate Authentication -->
 		<dependency>
 			<groupId>org.bouncycastle</groupId>
-			<artifactId>bcpkix-jdk15on</artifactId>
-			<version>${bcpkix-jdk15on.version}</version>
+			<artifactId>bcpkix-jdk18on</artifactId>
+			<version>${bcpkix-jdk18on.version}</version>
 			<optional>true</optional>
 		</dependency>
 		<!-- dependencies provided by an OSGi-Framework -->
@@ -150,11 +135,10 @@
 		</dependency>
 		<dependency>
 			<groupId>org.osgi</groupId>
-			<artifactId>org.osgi.compendium</artifactId>
-			<version>${org.osgi.compendium.version}</version>
+			<artifactId>org.osgi.service.jdbc</artifactId>
+			<version>${osgi.jdbc.version}</version>
 			<scope>provided</scope>
 		</dependency>
-
 		<!-- dependencies for running tests -->
 		<dependency>
 			<groupId>org.junit.platform</groupId>
@@ -241,7 +225,30 @@
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
-
+	<repositories>
+		<repository>
+			<id>central</id>
+			<url>https://sqlclientdrivers.pkgs.visualstudio.com/public/_packaging/mssql-jdbc/maven/v1</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
+	</repositories>
+	<pluginRepositories>
+		<pluginRepository>
+			<id>central</id>
+			<url>https://sqlclientdrivers.pkgs.visualstudio.com/public/_packaging/mssql-jdbc/maven/v1</url>
+			<releases>
+				<enabled>true</enabled>
+			</releases>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</pluginRepository>
+	</pluginRepositories>
 	<profiles>
 		<profile>
 			<id>jre8</id>
@@ -363,12 +370,9 @@
 			</build>
 		</profile>
 		<profile>
-			<id>jre19</id>
-			<activation>
-				<activeByDefault>true</activeByDefault>
-			</activation>
+			<id>jre21</id>
 			<build>
-				<finalName>${project.artifactId}-${project.version}.jre19${releaseExt}</finalName>
+				<finalName>${project.artifactId}-${project.version}.jre21${releaseExt}</finalName>
 				<plugins>
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
@@ -378,8 +382,44 @@
 							<excludes>
 								<exclude>**/com/microsoft/sqlserver/jdbc/SQLServerJdbc42.java</exclude>
 							</excludes>
-							<source>19</source>
-							<target>19</target>
+							<source>21</source>
+							<target>21</target>
+						</configuration>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-jar-plugin</artifactId>
+						<version>3.1.1</version>
+						<configuration>
+							<archive>
+								<manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+								<manifestEntries>
+									<Automatic-Module-Name>com.microsoft.sqlserver.jdbc</Automatic-Module-Name>
+								</manifestEntries>
+							</archive>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+		<profile>
+			<id>jre23</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
+			<build>
+				<finalName>${project.artifactId}-${project.version}.jre23${releaseExt}</finalName>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-compiler-plugin</artifactId>
+						<version>3.8.0</version>
+						<configuration>
+							<excludes>
+								<exclude>**/com/microsoft/sqlserver/jdbc/SQLServerJdbc42.java</exclude>
+							</excludes>
+							<source>23</source>
+							<target>23</target>
 						</configuration>
 					</plugin>
 					<plugin>
@@ -495,7 +535,7 @@
 							com.microsoft.sqlserver.jdbc.dataclassification,
 							microsoft.sql
 						</_exportcontents>
-						<Import-Package>!microsoft.sql,*</Import-Package>
+						<Import-Package>!microsoft.sql,jdk.net;resolution:=optional,*</Import-Package>
 						<Bundle-Activator>com.microsoft.sqlserver.jdbc.osgi.Activator</Bundle-Activator>
 					</instructions>
 				</configuration>
@@ -539,7 +579,7 @@
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.8</version>
+				<version>0.8.12</version>
 				<executions>
 					<execution>
 						<id>pre-test</id>

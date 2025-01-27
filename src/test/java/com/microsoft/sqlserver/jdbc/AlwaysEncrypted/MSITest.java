@@ -51,6 +51,7 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
     public void testManagedIdentityAuth() throws SQLException {
         String connStr = connectionString;
@@ -78,6 +79,7 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
     public void testManagedIdentityAuthWithManagedIdentityClientId() throws SQLException {
         String connStr = connectionString;
@@ -116,6 +118,7 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
     public void testDSManagedIdentityAuth() throws SQLException {
         String connStr = connectionString;
@@ -141,6 +144,7 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
     public void testDSManagedIdentityAuthWithManagedIdentityClientId() throws SQLException {
         String connStr = connectionString;
@@ -169,12 +173,13 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
-    public void testDefaultAzureCredentialAuth() throws SQLException {
+    public void testActiveDirectoryDefaultAuth() throws SQLException {
         String connStr = connectionString;
         connStr = TestUtils.addOrOverrideProperty(connStr, Constants.USER, managedIdentityClientId);
         connStr = TestUtils.addOrOverrideProperty(connStr, Constants.PASSWORD, "");
-        connStr = TestUtils.addOrOverrideProperty(connStr, Constants.AUTHENTICATION, "DefaultAzureCredential");
+        connStr = TestUtils.addOrOverrideProperty(connStr, Constants.AUTHENTICATION, "ActiveDirectoryDefault");
 
         // With Managed Identity client ID
         try (SQLServerConnection con = (SQLServerConnection) PrepUtil.getConnection(connStr)) {}
@@ -188,14 +193,15 @@ public class MSITest extends AESetup {
     @Tag(Constants.xSQLv12)
     @Tag(Constants.xSQLv14)
     @Tag(Constants.xSQLv15)
+    @Tag(Constants.xSQLv16)
     @Test
-    public void testDefaultAzureCredentialAuthDS() throws SQLException {
+    public void testActiveDirectoryDefaultAuthDS() throws SQLException {
         String connStr = connectionString;
         connStr = TestUtils.addOrOverrideProperty(connStr, Constants.USER, "");
         connStr = TestUtils.addOrOverrideProperty(connStr, Constants.PASSWORD, "");
 
         SQLServerDataSource ds = new SQLServerDataSource();
-        ds.setAuthentication("DefaultAzureCredential");
+        ds.setAuthentication("ActiveDirectoryDefault");
         ds.setMSIClientId(managedIdentityClientId);
         AbstractTest.updateDataSource(connStr, ds);
 

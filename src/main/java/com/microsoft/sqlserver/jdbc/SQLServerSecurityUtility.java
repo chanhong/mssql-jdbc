@@ -8,10 +8,15 @@ package com.microsoft.sqlserver.jdbc;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.text.MessageFormat;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -23,14 +28,16 @@ import com.azure.identity.ManagedIdentityCredentialBuilder;
 import com.azure.identity.DefaultAzureCredential;
 import com.azure.identity.DefaultAzureCredentialBuilder;
 
+import static com.microsoft.sqlserver.jdbc.Util.getHashedSecret;
+
 
 /**
  * Various SQLServer security utilities.
  *
  */
 class SQLServerSecurityUtility {
-    static final private java.util.logging.Logger connectionlogger = java.util.logging.Logger
-            .getLogger("com.microsoft.sqlserver.jdbc.internals.SQLServerConnection");
+    static final private java.util.logging.Logger logger = java.util.logging.Logger
+            .getLogger("com.microsoft.sqlserver.jdbc.SQLServerSecurityUtility");
 
     static final int GONE = 410;
     static final int TOO_MANY_RESQUESTS = 429;
@@ -45,6 +52,17 @@ class SQLServerSecurityUtility {
 
     // Environment variable for additionally allowed tenants. The tenantIds are comma delimited
     private static final String ADDITIONALLY_ALLOWED_TENANTS = "ADDITIONALLY_ALLOWED_TENANTS";
+
+    // Credential Cache for ManagedIdentityCredential and DefaultAzureCredential
+    private static final HashMap<String, Credential> CREDENTIAL_CACHE = new HashMap<>();
+
+    private static final Lock CREDENTIAL_LOCK = new ReentrantLock();
+
+	private static final int TOKEN_WAIT_DURATION_MS = 20000;
+
+    private SQLServerSecurityUtility() {
+        throw new UnsupportedOperationException(SQLServerException.getErrString("R_notSupported"));
+    }
 
     /**
      * Give the hash of given plain text
@@ -122,19 +140,17 @@ class SQLServerSecurityUtility {
         String serverName = connection.getTrustedServerNameAE();
         assert null != serverName : "serverName should not be null in getKey.";
 
-        if (connectionlogger.isLoggable(java.util.logging.Level.FINE)) {
-            connectionlogger.fine("Checking trusted master key path...");
+        if (logger.isLoggable(java.util.logging.Level.FINEST)) {
+            logger.finest("Checking trusted master key path...");
         }
         Boolean[] hasEntry = new Boolean[1];
         List<String> trustedKeyPaths = SQLServerConnection.getColumnEncryptionTrustedMasterKeyPaths(serverName,
                 hasEntry);
-        if (hasEntry[0]) {
-            if ((null == trustedKeyPaths) || (0 == trustedKeyPaths.size())
-                    || (!trustedKeyPaths.contains(keyInfo.keyPath))) {
-                MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_UntrustedKeyPath"));
-                Object[] msgArgs = {keyInfo.keyPath, serverName};
-                throw new SQLServerException(null, form.format(msgArgs), null, 0, false);
-            }
+        if (hasEntry[0] && ((null == trustedKeyPaths) || (trustedKeyPaths.isEmpty())
+                || (!trustedKeyPaths.contains(keyInfo.keyPath)))) {
+            MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_UntrustedKeyPath"));
+            Object[] msgArgs = {keyInfo.keyPath, serverName};
+            throw new SQLServerException(null, form.format(msgArgs), null, 0, false);
         }
 
         SQLServerException lastException = null;
@@ -192,14 +208,14 @@ class SQLServerSecurityUtility {
      *        The cipher algorithm name
      * @return The cipher algorithm name
      */
-    private static String ValidateAndGetEncryptionAlgorithmName(byte cipherAlgorithmId,
+    private static String validateAndGetEncryptionAlgorithmName(byte cipherAlgorithmId,
             String cipherAlgorithmName) throws SQLServerException {
         // Custom cipher algorithm not supported for CTP.
         if (TDS.AEAD_AES_256_CBC_HMAC_SHA256 != cipherAlgorithmId) {
             throw new SQLServerException(null, SQLServerException.getErrString("R_CustomCipherAlgorithmNotSupportedAE"),
                     null, 0, false);
         }
-        return SQLServerAeadAes256CbcHmac256Algorithm.algorithmName;
+        return SQLServerAeadAes256CbcHmac256Algorithm.AEAD_AES_256_CBC_HMAC_SHA256;
     }
 
     /**
@@ -252,7 +268,7 @@ class SQLServerSecurityUtility {
         // Given the symmetric key instantiate a SqlClientEncryptionAlgorithm object and cache it in metadata.
         md.cipherAlgorithm = null;
         SQLServerEncryptionAlgorithm cipherAlgorithm = null;
-        String algorithmName = ValidateAndGetEncryptionAlgorithmName(md.cipherAlgorithmId, md.cipherAlgorithmName); // may
+        String algorithmName = validateAndGetEncryptionAlgorithmName(md.cipherAlgorithmId, md.cipherAlgorithmName); // may
                                                                                                                     // throw
         cipherAlgorithm = SQLServerEncryptionAlgorithmFactoryList.getInstance().getAlgorithm(symKey, md.encryptionType,
                 algorithmName); // will
@@ -292,18 +308,17 @@ class SQLServerSecurityUtility {
      */
     static void verifyColumnMasterKeyMetadata(SQLServerConnection connection, SQLServerStatement statement,
             String keyStoreName, String keyPath, String serverName, boolean isEnclaveEnabled,
-            byte[] CMKSignature) throws SQLServerException {
+            byte[] cmkSignature) throws SQLServerException {
 
         // check trusted key paths
         Boolean[] hasEntry = new Boolean[1];
         List<String> trustedKeyPaths = SQLServerConnection.getColumnEncryptionTrustedMasterKeyPaths(serverName,
                 hasEntry);
-        if (hasEntry[0]) {
-            if ((null == trustedKeyPaths) || (0 == trustedKeyPaths.size()) || (!trustedKeyPaths.contains(keyPath))) {
-                MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_UntrustedKeyPath"));
-                Object[] msgArgs = {keyPath, serverName};
-                throw new SQLServerException(form.format(msgArgs), null);
-            }
+        if (hasEntry[0]
+                && ((null == trustedKeyPaths) || (trustedKeyPaths.isEmpty()) || (!trustedKeyPaths.contains(keyPath)))) {
+            MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_UntrustedKeyPath"));
+            Object[] msgArgs = {keyPath, serverName};
+            throw new SQLServerException(form.format(msgArgs), null);
         }
 
         SQLServerColumnEncryptionKeyStoreProvider provider = null;
@@ -313,8 +328,8 @@ class SQLServerSecurityUtility {
             provider = connection.getSystemOrGlobalColumnEncryptionKeyStoreProvider(keyStoreName);
         }
 
-        if (!provider.verifyColumnMasterKeyMetadata(keyPath, isEnclaveEnabled, CMKSignature)) {
-            throw new SQLServerException(SQLServerException.getErrString("R_VerifySignature"), null);
+        if (!provider.verifyColumnMasterKeyMetadata(keyPath, isEnclaveEnabled, cmkSignature)) {
+            throw new SQLServerException(SQLServerException.getErrString("R_VerifySignatureFailed"), null);
         }
     }
 
@@ -329,13 +344,36 @@ class SQLServerSecurityUtility {
      * @throws SQLServerException
      */
     static SqlAuthenticationToken getManagedIdentityCredAuthToken(String resource,
-            String managedIdentityClientId) throws SQLServerException {
-        ManagedIdentityCredential mic = null;
+            String managedIdentityClientId, long millisecondsRemaining) throws SQLServerException {
 
-        if (null != managedIdentityClientId && !managedIdentityClientId.isEmpty()) {
-            mic = new ManagedIdentityCredentialBuilder().clientId(managedIdentityClientId).build();
-        } else {
-            mic = new ManagedIdentityCredentialBuilder().build();
+        if (logger.isLoggable(java.util.logging.Level.FINEST)) {
+            logger.finest("Getting Managed Identity authentication token for: " + managedIdentityClientId);
+        }
+
+        String key = getHashedSecret(
+                new String[] {managedIdentityClientId, ManagedIdentityCredential.class.getSimpleName()});
+        ManagedIdentityCredential mic = (ManagedIdentityCredential) getCredentialFromCache(key);
+
+        if (null == mic) {
+            CREDENTIAL_LOCK.lock();
+
+            try {
+                mic = (ManagedIdentityCredential) getCredentialFromCache(key);
+                if (null == mic) {
+                    ManagedIdentityCredentialBuilder micBuilder = new ManagedIdentityCredentialBuilder();
+
+                    if (null != managedIdentityClientId && !managedIdentityClientId.isEmpty()) {
+                        mic = micBuilder.clientId(managedIdentityClientId).build();
+                    } else {
+                        mic = micBuilder.build();
+                    }
+
+                    Credential credential = new Credential(mic);
+                    CREDENTIAL_CACHE.put(key, credential);
+                }
+            } finally {
+                CREDENTIAL_LOCK.unlock();
+            }
         }
 
         TokenRequestContext tokenRequestContext = new TokenRequestContext();
@@ -345,7 +383,7 @@ class SQLServerSecurityUtility {
 
         SqlAuthenticationToken sqlFedAuthToken = null;
 
-        Optional<AccessToken> accessTokenOptional = mic.getToken(tokenRequestContext).blockOptional();
+        Optional<AccessToken> accessTokenOptional = mic.getToken(tokenRequestContext).timeout(Duration.of(Math.min(millisecondsRemaining, TOKEN_WAIT_DURATION_MS), ChronoUnit.MILLIS)).blockOptional();
 
         if (!accessTokenOptional.isPresent()) {
             throw new SQLServerException(SQLServerException.getErrString("R_ManagedIdentityTokenAcquisitionFail"),
@@ -353,7 +391,11 @@ class SQLServerSecurityUtility {
         } else {
             AccessToken accessToken = accessTokenOptional.get();
             sqlFedAuthToken = new SqlAuthenticationToken(accessToken.getToken(),
-                    accessToken.getExpiresAt().toEpochSecond());
+                    accessToken.getExpiresAt().toInstant().toEpochMilli());
+        }
+
+        if (logger.isLoggable(java.util.logging.Level.FINEST)) {
+            logger.finest("Got fedAuth token, expiry: " + sqlFedAuthToken.getExpiresOn().toString());
         }
 
         return sqlFedAuthToken;
@@ -370,26 +412,53 @@ class SQLServerSecurityUtility {
      * @throws SQLServerException
      */
     static SqlAuthenticationToken getDefaultAzureCredAuthToken(String resource,
-            String managedIdentityClientId) throws SQLServerException {
+            String managedIdentityClientId, int millisecondsRemaining) throws SQLServerException {
         String intellijKeepassPath = System.getenv(INTELLIJ_KEEPASS_PASS);
         String[] additionallyAllowedTenants = getAdditonallyAllowedTenants();
 
-        DefaultAzureCredentialBuilder dacBuilder = new DefaultAzureCredentialBuilder();
-        DefaultAzureCredential dac = null;
-
-        if (null != managedIdentityClientId && !managedIdentityClientId.isEmpty()) {
-            dacBuilder.managedIdentityClientId(managedIdentityClientId);
-        }
-
-        if (null != intellijKeepassPath && !intellijKeepassPath.isEmpty()) {
-            dacBuilder.intelliJKeePassDatabasePath(intellijKeepassPath);
-        }
+        int secretsLength = null == additionallyAllowedTenants ? 3 : additionallyAllowedTenants.length + 3;
+        String[] secrets = new String[secretsLength];
 
         if (null != additionallyAllowedTenants && additionallyAllowedTenants.length != 0) {
-            dacBuilder.additionallyAllowedTenants(additionallyAllowedTenants);
+            System.arraycopy(additionallyAllowedTenants, 0, secrets, 3, additionallyAllowedTenants.length);
         }
 
-        dac = dacBuilder.build();
+        secrets[0] = DefaultAzureCredential.class.getSimpleName();
+        secrets[1] = managedIdentityClientId;
+        secrets[2] = intellijKeepassPath;
+
+        String key = getHashedSecret(secrets);
+        DefaultAzureCredential dac = (DefaultAzureCredential) getCredentialFromCache(key);
+
+        if (null == dac) {
+            CREDENTIAL_LOCK.lock();
+
+            try {
+                dac = (DefaultAzureCredential) getCredentialFromCache(key);
+                if (null == dac) {
+                    DefaultAzureCredentialBuilder dacBuilder = new DefaultAzureCredentialBuilder();
+
+                    if (null != managedIdentityClientId && !managedIdentityClientId.isEmpty()) {
+                        dacBuilder.managedIdentityClientId(managedIdentityClientId);
+                    }
+
+                    if (null != intellijKeepassPath && !intellijKeepassPath.isEmpty()) {
+                        dacBuilder.intelliJKeePassDatabasePath(intellijKeepassPath);
+                    }
+
+                    if (null != additionallyAllowedTenants && additionallyAllowedTenants.length != 0) {
+                        dacBuilder.additionallyAllowedTenants(additionallyAllowedTenants);
+                    }
+
+                    dac = dacBuilder.build();
+
+                    Credential credential = new Credential(dac);
+                    CREDENTIAL_CACHE.put(key, credential);
+                }
+            } finally {
+                CREDENTIAL_LOCK.unlock();
+            }
+        }
 
         TokenRequestContext tokenRequestContext = new TokenRequestContext();
         String scope = resource.endsWith(SQLServerMSAL4JUtils.SLASH_DEFAULT) ? resource : resource
@@ -398,7 +467,7 @@ class SQLServerSecurityUtility {
 
         SqlAuthenticationToken sqlFedAuthToken = null;
 
-        Optional<AccessToken> accessTokenOptional = dac.getToken(tokenRequestContext).blockOptional();
+        Optional<AccessToken> accessTokenOptional = dac.getToken(tokenRequestContext).timeout(Duration.of(Math.min(millisecondsRemaining, TOKEN_WAIT_DURATION_MS), ChronoUnit.MILLIS)).blockOptional();
 
         if (!accessTokenOptional.isPresent()) {
             throw new SQLServerException(SQLServerException.getErrString("R_ManagedIdentityTokenAcquisitionFail"),
@@ -406,7 +475,7 @@ class SQLServerSecurityUtility {
         } else {
             AccessToken accessToken = accessTokenOptional.get();
             sqlFedAuthToken = new SqlAuthenticationToken(accessToken.getToken(),
-                    accessToken.getExpiresAt().toEpochSecond());
+                    accessToken.getExpiresAt().toInstant().toEpochMilli());
         }
 
         return sqlFedAuthToken;
@@ -420,5 +489,23 @@ class SQLServerSecurityUtility {
         }
 
         return null;
+    }
+
+    private static Object getCredentialFromCache(String key) {
+        Credential credential = CREDENTIAL_CACHE.get(key);
+
+        if (null != credential) {
+            return credential.tokenCredential;
+        }
+
+        return null;
+    }
+
+    private static class Credential {
+        Object tokenCredential;
+
+        public Credential(Object tokenCredential) {
+            this.tokenCredential = tokenCredential;
+        }
     }
 }

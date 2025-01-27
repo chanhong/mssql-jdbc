@@ -22,7 +22,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.time.zone.ZoneOffsetTransition;
 import java.time.zone.ZoneRules;
@@ -1624,6 +1626,22 @@ public class DataTypesTest extends AbstractTest {
                         fail(TestResource.getResource("R_expectedExceptionNotThrown"));
                     }
 
+                    exceptionThrown = true;
+                    // Verify SQLState 22005 is in exception for conversion errors
+                    try {
+                        Timestamp timestamp = Timestamp.valueOf("9999-12-31 23:59:59.998");
+                        rs.updateTimestamp(1, timestamp);
+                        rs.updateRow();
+                        rs.getLong(1);
+                        exceptionThrown = false;
+                    } catch (SQLServerException e) {
+                        assertEquals("22005", e.getSQLState());
+                    }
+
+                    if (!exceptionThrown) {
+                        fail(TestResource.getResource("R_expectedExceptionNotThrown"));
+                    }
+
                     // Update time(5) from Timestamp with nanos more precise than 100ns
                     Timestamp ts = Timestamp.valueOf("2010-01-12 11:05:23");
                     ts.setNanos(987659999);
@@ -1855,6 +1873,47 @@ public class DataTypesTest extends AbstractTest {
         }
     }
 
+    @Test
+    public void testGetLocalDateTimeTypes() throws Exception {
+        // test value needs to be in a time zone other than local
+        OffsetDateTime value = OffsetDateTime.now().truncatedTo(ChronoUnit.MILLIS); // Linux has more precision than SQL Server
+        int offsetSeconds = value.getOffset().getTotalSeconds();
+        offsetSeconds += offsetSeconds < 0 ? 3600 : -3600;
+        value = value.withOffsetSameLocal(ZoneOffset.ofTotalSeconds(offsetSeconds));
+        LocalDateTime valueWithOffsetConversion = value.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+
+        try (SQLServerConnection conn = PrepUtil.getConnection(connectionString)) {
+            try (PreparedStatement stmt = conn.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, value);
+
+                ResultSet rs = stmt.executeQuery();
+                rs.next();
+
+                // default behavior is to apply the time zone offset when converting DATETIMEOFFSET to local java.time types
+                assertEquals(value, rs.getObject(1, OffsetDateTime.class));
+                assertEquals(valueWithOffsetConversion, rs.getObject(1, LocalDateTime.class));
+                assertEquals(valueWithOffsetConversion.toLocalDate(), rs.getObject(1, LocalDate.class));
+                assertEquals(valueWithOffsetConversion.toLocalTime(), rs.getObject(1, LocalTime.class));
+            }
+
+            // change the behavior to be compatible with java.time conversion methods
+            conn.setIgnoreOffsetOnDateTimeOffsetConversion(true);
+
+            try (PreparedStatement stmt = conn.prepareStatement("SELECT ?")) {
+                stmt.setObject(1, value);
+
+                ResultSet rs = stmt.executeQuery();
+                rs.next();
+
+                // now the offset should be ignored instead of converting to local time zone
+                assertEquals(value, rs.getObject(1, OffsetDateTime.class));
+                assertEquals(value.toLocalDateTime(), rs.getObject(1, LocalDateTime.class));
+                assertEquals(value.toLocalDate(), rs.getObject(1, LocalDate.class));
+                assertEquals(value.toLocalTime(), rs.getObject(1, LocalTime.class));
+            }
+        }
+    }
+
     /**
      * Test example from https://github.com/microsoft/mssql-jdbc/issues/1143
      * 
@@ -1873,6 +1932,45 @@ public class DataTypesTest extends AbstractTest {
                     assertEquals(unstorableValue, actual);
                 }
             }
+        }
+    }
+
+    @Test
+    public void testDateTimeOffsetValueOfOffsetDateTime() throws Exception {
+        OffsetDateTime expected = OffsetDateTime.now().withSecond(58).withNano(0);
+        OffsetDateTime roundUp = expected.withSecond(57).withNano(999999950);
+        OffsetDateTime roundDown = expected.withSecond(58).withNano(49);
+
+        assertEquals(expected, DateTimeOffset.valueOf(expected).getOffsetDateTime());
+        assertEquals(expected, DateTimeOffset.valueOf(roundUp).getOffsetDateTime());
+        assertEquals(expected, DateTimeOffset.valueOf(roundDown).getOffsetDateTime());
+    }
+    
+    @Test
+    public void testPreGregorianDateTime() throws Exception {
+        try (Connection conn = getConnection();
+                Statement stmt = conn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE);) {
+
+            conn.setAutoCommit(false);
+            TestUtils.dropTableIfExists(escapedTableName, stmt);
+
+            stmt.executeUpdate("CREATE TABLE " + escapedTableName + " (dob datetimeoffset(7) null)");
+            stmt.executeUpdate("INSERT INTO " + escapedTableName + " VALUES ('1500-12-16 00:00:00.0000000+08:00')");
+            stmt.executeUpdate("INSERT INTO " + escapedTableName + " VALUES ('1400-09-27 09:30:00.0000000+08:00')");
+            stmt.executeUpdate("INSERT INTO " + escapedTableName + " VALUES ('2024-12-16 23:40:00.0000000+08:00')");
+
+            try (ResultSet rs = stmt.executeQuery("select dob from " + escapedTableName + " order by dob")) {
+                while (rs.next()) {
+                    String strDateTimeOffset = rs.getString(1).substring(0, 10);
+                    DateTimeOffset objDateTimeOffset = (DateTimeOffset) rs.getObject(1);
+                    OffsetDateTime objOffsetDateTime = objDateTimeOffset.getOffsetDateTime();
+
+                    String strOffsetDateTime = objOffsetDateTime.toString().substring(0, 10);
+                    assertEquals(strDateTimeOffset, strOffsetDateTime, "Mismatch found in DateTimeOffset : "
+                            + objDateTimeOffset + " and OffsetDateTime : " + objOffsetDateTime);
+                }
+            }
+            TestUtils.dropTableIfExists(escapedTableName, stmt);
         }
     }
 

@@ -41,7 +41,7 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     /**
      * Permission targets currently only callAbort is implemented
      */
-    private static final String callAbortPerm = "callAbort";
+    private static final String CALL_ABORT_PERM = "callAbort";
 
     /**
      * Generates the next unique connection id.
@@ -125,6 +125,7 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void abort(Executor executor) throws SQLException {
         if (!bIsOpen || (null == wrappedConnection))
             return;
@@ -139,11 +140,11 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
         SecurityManager secMgr = System.getSecurityManager();
         if (secMgr != null) {
             try {
-                java.sql.SQLPermission perm = new java.sql.SQLPermission(callAbortPerm);
+                java.sql.SQLPermission perm = new java.sql.SQLPermission(CALL_ABORT_PERM);
                 secMgr.checkPermission(perm);
             } catch (SecurityException ex) {
                 MessageFormat form = new MessageFormat(SQLServerException.getErrString("R_permissionDenied"));
-                Object[] msgArgs = {callAbortPerm};
+                Object[] msgArgs = {CALL_ABORT_PERM};
                 throw new SQLServerException(form.format(msgArgs), null, 0, ex);
             }
         }
@@ -505,8 +506,7 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
         try {
             t = iface.cast(this);
         } catch (ClassCastException e) {
-            SQLServerException newe = new SQLServerException(e.getMessage(), e);
-            throw newe;
+            throw new SQLServerException(e.getMessage(), e);
         }
         wrappedConnection.getConnectionLogger().exiting(toString(), "unwrap", t);
         return t;
@@ -531,6 +531,18 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     }
 
     @Override
+    public void setDatetimeParameterType(String datetimeParameterTypeValue) throws SQLServerException {
+        checkClosed();
+        wrappedConnection.setDatetimeParameterType(datetimeParameterTypeValue);
+    }
+
+    @Override
+    public String getDatetimeParameterType() throws SQLServerException {
+        checkClosed();
+        return wrappedConnection.getDatetimeParameterType();
+    }
+
+    @Override
     public int getDiscardedServerPreparedStatementCount() {
         return wrappedConnection.getDiscardedServerPreparedStatementCount();
     }
@@ -548,6 +560,16 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     @Override
     public void setEnablePrepareOnFirstPreparedStatementCall(boolean value) {
         wrappedConnection.setEnablePrepareOnFirstPreparedStatementCall(value);
+    }
+
+    @Override
+    public boolean getcacheBulkCopyMetadata() {
+        return wrappedConnection.getcacheBulkCopyMetadata();
+    }
+
+    @Override
+    public void setcacheBulkCopyMetadata(boolean value) {
+        wrappedConnection.setcacheBulkCopyMetadata(value);
     }
 
     @Override
@@ -621,6 +643,16 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     }
 
     @Override
+    public boolean getIgnoreOffsetOnDateTimeOffsetConversion() {
+        return wrappedConnection.getIgnoreOffsetOnDateTimeOffsetConversion();
+    }
+
+    @Override
+    public void setIgnoreOffsetOnDateTimeOffsetConversion(boolean ignoreOffsetOnDateTimeOffsetConversion) {
+        wrappedConnection.setIgnoreOffsetOnDateTimeOffsetConversion(ignoreOffsetOnDateTimeOffsetConversion);
+    }
+
+    @Override
     public void setIPAddressPreference(String iPAddressPreference) {
         wrappedConnection.setIPAddressPreference(iPAddressPreference);
 
@@ -632,20 +664,232 @@ class SQLServerConnectionPoolProxy implements ISQLServerConnection, java.io.Seri
     }
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
-     * This method will always return 0 and is for backwards compatibility only.
+     * @deprecated Time-to-live is no longer supported for the cached Managed Identity tokens.
+     *             This method will always return 0 and is for backwards compatibility only.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public int getMsiTokenCacheTtl() {
         return 0;
     }
 
     /**
-     * Deprecated. Time-to-live is no longer supported for the cached Managed Identity tokens.
-     * This method is a no-op for backwards compatibility only.
+     * @deprecated Time-to-live is no longer supported for the cached Managed Identity tokens.
+     *             This method is a no-op for backwards compatibility only.
      */
-    @Deprecated
+    @Deprecated(since = "12.1.0", forRemoval = true)
     @Override
     public void setMsiTokenCacheTtl(int timeToLive) {}
+
+    /**
+     * Returns the fully qualified class name of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @return accessTokenCallbackClass
+     */
+    @Override
+    public String getAccessTokenCallbackClass() {
+        return wrappedConnection.getAccessTokenCallbackClass();
+    }
+
+    /**
+     * Sets 'accessTokenCallbackClass' to the fully qualified class name
+     * of the implementing class for {@link SQLServerAccessTokenCallback}.
+     *
+     * @param accessTokenCallbackClass
+     */
+    @Override
+    public void setAccessTokenCallbackClass(String accessTokenCallbackClass) {
+        wrappedConnection.setAccessTokenCallbackClass(accessTokenCallbackClass);
+    }
+
+    @Override
+    public ISQLServerMessageHandler getServerMessageHandler() {
+        return wrappedConnection.getServerMessageHandler();
+    }
+
+    @Override
+    public ISQLServerMessageHandler setServerMessageHandler(ISQLServerMessageHandler messageHandler) {
+        return wrappedConnection.setServerMessageHandler(messageHandler);
+    }
+
+    /**
+     * Returns the current value for 'calcBigDecimalPrecision'.
+     *
+     * @return calcBigDecimalPrecision
+     *         a boolean
+     */
+    @Override
+    public boolean getCalcBigDecimalPrecision() {
+        return wrappedConnection.getCalcBigDecimalPrecision();
+    }
+
+    /**
+     * Sets the current value of 'calculateBigDecimalPrecision' for the driver.
+     *
+     * @param calcBigDecimalPrecision
+     */
+    @Override
+    public void setCalcBigDecimalPrecision(boolean calcBigDecimalPrecision) {
+        wrappedConnection.setCalcBigDecimalPrecision(calcBigDecimalPrecision);
+    }
+
+    /**
+     * Returns the useBulkCopyForBatchInsert value.
+     * 
+     * @return flag for using Bulk Copy API for batch insert operations.
+     */
+    @Override
+    public boolean getUseBulkCopyForBatchInsert() {
+        return wrappedConnection.getUseBulkCopyForBatchInsert();
+    }
+
+    /**
+     * Specifies the flag for using Bulk Copy API for batch insert operations.
+     * 
+     * @param useBulkCopyForBatchInsert
+     *        boolean value for useBulkCopyForBatchInsert.
+     */
+    @Override
+    public void setUseBulkCopyForBatchInsert(boolean useBulkCopyForBatchInsert) {
+        wrappedConnection.setUseBulkCopyForBatchInsert(useBulkCopyForBatchInsert);
+    }
+    
+    /** 
+     * The default batch size for bulk copy operations created from batch insert operations.
+     */
+    private int bulkCopyForBatchInsertBatchSize = 0;
+
+    /**
+     * Returns the bulkCopyForBatchInsertBatchSize value.
+     * 
+     * @return the bulkCopyForBatchInsertBatchSize value.
+     */
+    public int getBulkCopyForBatchInsertBatchSize() {
+        return wrappedConnection.getBulkCopyForBatchInsertBatchSize();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertBatchSize value.
+     * 
+     * @param bulkCopyForBatchInsertBatchSize
+     *        the bulkCopyForBatchInsertBatchSize value to set.
+     */
+    public void setBulkCopyForBatchInsertBatchSize(int bulkCopyForBatchInsertBatchSize) {
+    	wrappedConnection.setBulkCopyForBatchInsertBatchSize(bulkCopyForBatchInsertBatchSize);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertCheckConstraints value.
+     * 
+     * @return the bulkCopyForBatchInsertCheckConstraints value.
+     */
+    public boolean getBulkCopyForBatchInsertCheckConstraints() {
+        return wrappedConnection.getBulkCopyForBatchInsertCheckConstraints();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertCheckConstraints value.
+     * 
+     * @param bulkCopyForBatchInsertCheckConstraints
+     *        the bulkCopyForBatchInsertCheckConstraints value to set.
+     */
+    public void setBulkCopyForBatchInsertCheckConstraints(boolean bulkCopyForBatchInsertCheckConstraints) {
+        wrappedConnection.setBulkCopyForBatchInsertCheckConstraints(bulkCopyForBatchInsertCheckConstraints);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertFireTriggers value.
+     * 
+     * @return the bulkCopyForBatchInsertFireTriggers value.
+     */
+    public boolean getBulkCopyForBatchInsertFireTriggers() {
+        return wrappedConnection.getBulkCopyForBatchInsertFireTriggers();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertFireTriggers value.
+     * 
+     * @param bulkCopyForBatchInsertFireTriggers
+     *        the bulkCopyForBatchInsertFireTriggers value to set.
+     */
+    public void setBulkCopyForBatchInsertFireTriggers(boolean bulkCopyForBatchInsertFireTriggers) {
+        wrappedConnection.setBulkCopyForBatchInsertFireTriggers(bulkCopyForBatchInsertFireTriggers);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertKeepIdentity value.
+     * 
+     * @return the bulkCopyForBatchInsertKeepIdentity value.
+     */
+    public boolean getBulkCopyForBatchInsertKeepIdentity() {
+        return wrappedConnection.getBulkCopyForBatchInsertKeepIdentity();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertKeepIdentity value.
+     * 
+     * @param bulkCopyForBatchInsertKeepIdentity
+     *        the bulkCopyForBatchInsertKeepIdentity value to set.
+     */
+    public void setBulkCopyForBatchInsertKeepIdentity(boolean bulkCopyForBatchInsertKeepIdentity) {
+        wrappedConnection.setBulkCopyForBatchInsertKeepIdentity(bulkCopyForBatchInsertKeepIdentity);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertKeepNulls value.
+     * 
+     * @return the bulkCopyForBatchInsertKeepNulls value.
+     */
+    public boolean getBulkCopyForBatchInsertKeepNulls() {
+        return wrappedConnection.getBulkCopyForBatchInsertKeepNulls();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertKeepNulls value.
+     * 
+     * @param bulkCopyForBatchInsertKeepNulls
+     *        the bulkCopyForBatchInsertKeepNulls value to set.
+     */
+    public void setBulkCopyForBatchInsertKeepNulls(boolean bulkCopyForBatchInsertKeepNulls) {
+        wrappedConnection.setBulkCopyForBatchInsertKeepNulls(bulkCopyForBatchInsertKeepNulls);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertTableLock value.
+     * 
+     * @return the bulkCopyForBatchInsertTableLock value.
+     */
+    public boolean getBulkCopyForBatchInsertTableLock() {
+        return wrappedConnection.getBulkCopyForBatchInsertTableLock();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertTableLock value.
+     * 
+     * @param bulkCopyForBatchInsertTableLock
+     *        the bulkCopyForBatchInsertTableLock value to set.
+     */
+    public void setBulkCopyForBatchInsertTableLock(boolean bulkCopyForBatchInsertTableLock) {
+    	wrappedConnection.setBulkCopyForBatchInsertTableLock(bulkCopyForBatchInsertTableLock);
+    }
+
+    /**
+     * Returns the bulkCopyForBatchInsertAllowEncryptedValueModifications value.
+     * 
+     * @return the bulkCopyForBatchInsertAllowEncryptedValueModifications value.
+     */
+    public boolean getBulkCopyForBatchInsertAllowEncryptedValueModifications() {
+    	return wrappedConnection.getBulkCopyForBatchInsertAllowEncryptedValueModifications();
+    }
+
+    /**
+     * Sets the bulkCopyForBatchInsertAllowEncryptedValueModifications value.
+     * 
+     * @param bulkCopyForBatchInsertAllowEncryptedValueModifications
+     *        the bulkCopyForBatchInsertAllowEncryptedValueModifications value to set.
+     */
+    public void setBulkCopyForBatchInsertAllowEncryptedValueModifications(boolean bulkCopyForBatchInsertAllowEncryptedValueModifications) {
+        wrappedConnection.setBulkCopyForBatchInsertAllowEncryptedValueModifications(bulkCopyForBatchInsertAllowEncryptedValueModifications);
+    }
+
 }

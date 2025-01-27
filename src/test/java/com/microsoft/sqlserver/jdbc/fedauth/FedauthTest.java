@@ -7,6 +7,7 @@ package com.microsoft.sqlserver.jdbc.fedauth;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -17,7 +18,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.MessageFormat;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -26,6 +30,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.platform.runner.JUnitPlatform;
 import org.junit.runner.RunWith;
 
+import com.microsoft.aad.msal4j.IAuthenticationResult;
+import com.microsoft.aad.msal4j.SilentParameters;
 import com.microsoft.sqlserver.jdbc.RandomUtil;
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
 import com.microsoft.sqlserver.jdbc.TestResource;
@@ -40,9 +46,12 @@ public class FedauthTest extends FedauthCommon {
     static String charTable = TestUtils
             .escapeSingleQuotes(AbstractSQLGenerator.escapeIdentifier(RandomUtil.getIdentifier("JDBC_FedAuthTest")));
 
+    private static String accessTokenCallbackConnectionString;
+
     @BeforeAll
     public static void setupTests() throws Exception {
         connectionString = TestUtils.addOrOverrideProperty(connectionString, "trustServerCertificate", "true");
+        accessTokenCallbackConnectionString = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";";
         setConnection();
     }
 
@@ -251,7 +260,7 @@ public class FedauthTest extends FedauthCommon {
      * encryption, in addition to application name in order to use different authorities.
      *
      * @throws Exception
-     *          if an exception occurs
+     *         if an exception occurs
      */
     @Test
     public void testAADPasswordApplicationName() throws Exception {
@@ -263,8 +272,7 @@ public class FedauthTest extends FedauthCommon {
         SQLServerDataSource ds = new SQLServerDataSource();
         ds.setURL(url);
 
-        try (Connection con = ds.getConnection()) {
-        } catch (Exception e) {
+        try (Connection con = ds.getConnection()) {} catch (Exception e) {
             fail(e.getMessage());
         }
     }
@@ -275,11 +283,12 @@ public class FedauthTest extends FedauthCommon {
      * 
      * @deprecated
      */
+    @Deprecated
     @Test
     public void testAADServicePrincipalAuthDeprecated() {
         String url = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
-                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";AADSecurePrincipalId=" + azureAADPrincipialId
-                + ";AADSecurePrincipalSecret=" + azureAADPrincipialSecret;
+                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";AADSecurePrincipalId=" + applicationClientID
+                + ";AADSecurePrincipalSecret=" + applicationKey;
         String urlEncrypted = url + ";encrypt=true;trustServerCertificate=true;";
         SQLServerDataSource ds = new SQLServerDataSource();
         updateDataSource(url, ds);
@@ -300,8 +309,8 @@ public class FedauthTest extends FedauthCommon {
     @Test
     public void testAADServicePrincipalAuth() {
         String url = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
-                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";Username=" + azureAADPrincipialId + ";Password="
-                + azureAADPrincipialSecret;
+                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";Username=" + applicationClientID + ";Password="
+                + applicationKey;
         String urlEncrypted = url + ";encrypt=true;trustServerCertificate=true;";
         SQLServerDataSource ds = new SQLServerDataSource();
         updateDataSource(url, ds);
@@ -315,6 +324,66 @@ public class FedauthTest extends FedauthCommon {
         }
     }
 
+    @Test
+    public void testAADServicePrincipalAuthFailureOnSubsequentConnectionsWithInvalidatedTokenCacheWithInvalidSecret() throws Exception {
+        String url = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
+                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";Username=" + applicationClientID + ";Password="
+                + applicationKey;
+
+        String invalidSecretUrl = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
+                + SqlAuthentication.ActiveDirectoryServicePrincipal + ";Username=" + applicationClientID + ";Password="
+                + "invalidSecret";
+
+        // Should succeed on valid secret
+        try (Connection connection = DriverManager.getConnection(url)) {}
+
+        // Should fail on invalid secret
+        try (Connection connection = DriverManager.getConnection(invalidSecretUrl)) {
+            fail(TestResource.getResource("R_expectedFailPassed"));
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains(TestResource.getResource("R_invalidClientSecret")),
+                    "Expected R_invalidClientSecret error.");
+        }
+    }
+
+    @Test
+    public void testActiveDirectoryPasswordFailureOnSubsequentConnectionsWithInvalidatedTokenCacheWithInvalidPassword() throws Exception {
+
+        // Should succeed on valid password
+        try (Connection conn = DriverManager.getConnection(adPasswordConnectionStr)) {}
+
+        // Should fail on invalid password
+        try (Connection conn = DriverManager.getConnection(adPasswordConnectionStr + ";password=invalidPassword;")) {
+            fail(TestResource.getResource("R_expectedFailPassed"));
+        } catch (Exception e) {
+            MessageFormat form = new MessageFormat(TestResource.getResource("R_invalidAADAuth"));
+            Object[] msgArgs = {azureUserName, "ActiveDirectoryPassword"};
+            assertTrue(e.getMessage().contains(form.format(msgArgs)), "Expected R_invalidAADAuth error.");
+        }
+    }
+
+    @Test
+    public void testAADServicePrincipalCertAuthFailureOnSubsequentConnectionsWithInvalidatedTokenCacheWithInvalidPassword() throws Exception {
+        // Should succeed on valid cert field values
+        String url = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
+                + SqlAuthentication.ActiveDirectoryServicePrincipalCertificate + ";Username=" + servicePrincipalCertificateApplicationClientId
+                + ";clientCertificate=" + clientCertificate;
+
+        // Should fail on invalid cert field values
+        String invalidPasswordUrl = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase
+                + ";authentication=" + SqlAuthentication.ActiveDirectoryServicePrincipalCertificate + ";Username="
+                + applicationClientID + ";password=invalidPassword;clientCertificate=" + clientCertificate;
+
+        try (Connection conn = DriverManager.getConnection(url)) {}
+
+        try (Connection conn = DriverManager.getConnection(invalidPasswordUrl)) {
+            fail(TestResource.getResource("R_expectedFailPassed"));
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains(TestResource.getResource("R_invalidCertFields")),
+                    "Expected R_invalidCertFields error.");
+        }
+    }
+
     /**
      * Test invalid connection property combinations when using AAD Service Principal Authentication.
      */
@@ -323,40 +392,123 @@ public class FedauthTest extends FedauthCommon {
         String baseUrl = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
                 + SqlAuthentication.ActiveDirectoryServicePrincipal + ";";
         // Wrong AADSecurePrincipalSecret provided.
-        String url = baseUrl + "AADSecurePrincipalId=" + azureAADPrincipialId + ";AADSecurePrincipalSecret=wrongSecret";
+        String url = baseUrl + "AADSecurePrincipalId=" + applicationClientID + ";AADSecurePrincipalSecret=wrongSecret";
         validateException(url, "R_MSALExecution");
 
         // Wrong AADSecurePrincipalId provided.
-        url = baseUrl + "AADSecurePrincipalId=wrongId;AADSecurePrincipalSecret=" + azureAADPrincipialSecret;
+        url = baseUrl + "AADSecurePrincipalId=wrongId;AADSecurePrincipalSecret=" + applicationKey;
         validateException(url, "R_MSALExecution");
 
         // AADSecurePrincipalSecret/password not provided.
-        url = baseUrl + "AADSecurePrincipalId=" + azureAADPrincipialId;
+        url = baseUrl + "AADSecurePrincipalId=" + applicationClientID;
         validateException(url, "R_NoUserPasswordForActiveServicePrincipal");
-        url = baseUrl + "Username=" + azureAADPrincipialId;
+        url = baseUrl + "Username=" + applicationClientID;
         validateException(url, "R_NoUserPasswordForActiveServicePrincipal");
 
         // AADSecurePrincipalId/username not provided.
-        url = baseUrl + "AADSecurePrincipalSecret=" + azureAADPrincipialSecret;
+        url = baseUrl + "AADSecurePrincipalSecret=" + applicationKey;
         validateException(url, "R_NoUserPasswordForActiveServicePrincipal");
-        url = baseUrl + "password=" + azureAADPrincipialSecret;
+        url = baseUrl + "password=" + applicationKey;
         validateException(url, "R_NoUserPasswordForActiveServicePrincipal");
 
         // Both AADSecurePrincipalId/username and AADSecurePrincipalSecret/password not provided.
         validateException(baseUrl, "R_NoUserPasswordForActiveServicePrincipal");
 
         // both username/password and AADSecurePrincipalId/AADSecurePrincipalSecret provided
-        url = baseUrl + "Username=" + azureAADPrincipialId + ";password=" + azureAADPrincipialSecret
-                + ";AADSecurePrincipalId=" + azureAADPrincipialId + ";AADSecurePrincipalSecret="
-                + azureAADPrincipialSecret;
+        url = baseUrl + "Username=" + applicationClientID + ";password=" + applicationKey + ";AADSecurePrincipalId="
+                + applicationClientID + ";AADSecurePrincipalSecret=" + applicationKey;
         validateException(url, "R_BothUserPasswordandDeprecated");
+    }
+
+    /**
+     * Test AAD Service Principal Certificate Authentication using username/password in connection string, data source and SSL
+     * encryption.
+     */
+    @Test
+    public void testAADServicePrincipalCertAuth() {
+        // certificate from AKV has no password
+        String url = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
+                + SqlAuthentication.ActiveDirectoryServicePrincipalCertificate + ";Username=" + servicePrincipalCertificateApplicationClientId
+                + ";clientCertificate=" + clientCertificate;
+        String urlEncrypted = url + ";encrypt=false;trustServerCertificate=true;";
+
+        SQLServerDataSource ds = new SQLServerDataSource();
+        updateDataSource(url, ds);
+        try (Connection conn1 = DriverManager.getConnection(url); Connection conn2 = ds.getConnection();
+                Connection conn3 = DriverManager.getConnection(urlEncrypted)) {
+            assertNotNull(conn1);
+            assertNotNull(conn2);
+            assertNotNull(conn3);
+        } catch (Exception e) {
+            fail(e.getMessage());
+        }
+    }
+
+    /**
+     * Test invalid connection property combinations when using AAD Service Principal Certificate Authentication.
+     */
+    @Test
+    public void testAADServicePrincipalCertAuthWrong() {
+        String baseUrl = "jdbc:sqlserver://" + azureServer + ";database=" + azureDatabase + ";authentication="
+                + SqlAuthentication.ActiveDirectoryServicePrincipalCertificate + ";userName=" + servicePrincipalCertificateApplicationClientId;
+
+        // no certificate provided.
+        String url = baseUrl;
+        validateException(url, "R_NoUserOrCertForActiveServicePrincipalCertificate");
+
+        // wrong principalid
+        url = baseUrl + "user=wrongId;clientCertificate=" + "cert";
+        validateException(url, "R_MSALExecution");
+
+        // bad cert
+        url = baseUrl + ";clientCertificate=badCert";
+        validateException(url, "R_readCertError");
+
+        // wrong certificate password
+        url = baseUrl + ";clientCertificate=" + clientCertificate + ";password=wrongPassword";
+        validateException(url, "R_readCertError");
+
+        // wrong certificate key or password
+        url = baseUrl + ";password=" + azurePassword + ";clientCertificate=" + clientCertificate + ";clientKey=wrongKey;"
+                + "clientPassword=wrongPassword";
+        validateException(url, "R_readCertError");
+    }
+
+    @Tag(Constants.xSQLv11)
+    @Tag(Constants.xSQLv12)
+    @Tag(Constants.xSQLv14)
+    @Tag(Constants.xAzureSQLDW)
+    @Tag(Constants.reqExternalSetup)
+    @Test
+    public void testAccessTokenCallbackClassConnection() throws Exception {
+        String cs = TestUtils.addOrOverrideProperty(accessTokenCallbackConnectionString, "accessTokenCallbackClass",
+                PooledConnectionTest.AccessTokenCallbackClass.class.getName());
+        try (Connection conn1 = DriverManager.getConnection(cs)) {}
+    }
+
+    @Test
+    public void testAccessTokenCache() {
+        try {
+            SilentParameters silentParameters = SilentParameters.builder(Collections.singleton(spn + "/.default"))
+                    .build();
+
+            // this will fail if not cached
+            CompletableFuture<IAuthenticationResult> future = fedauthClientApp.acquireTokenSilently(silentParameters);
+            IAuthenticationResult authenticationResult = future.get();
+            assertNotNull(authenticationResult.accessToken());
+            assertTrue(authenticationResult.accessToken().equals(accessToken), accessToken);
+        } catch (Exception e) {
+            fail(e.getMessage());
+        }
+
     }
 
     private static void validateException(String url, String resourceKey) {
         try (Connection conn = DriverManager.getConnection(url)) {
             fail(TestResource.getResource("R_expectedFailPassed"));
         } catch (SQLException e) {
-            assertTrue(e.getMessage().replaceAll("\r\n", "").matches(TestUtils.formatErrorMsg(resourceKey)));
+            assertTrue(e.getMessage().replaceAll("\r\n", "").matches(TestUtils.formatErrorMsg(resourceKey)),
+                    e.getMessage());
         }
     }
 

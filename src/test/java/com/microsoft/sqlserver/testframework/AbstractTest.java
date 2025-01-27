@@ -5,6 +5,8 @@
 
 package com.microsoft.sqlserver.testframework;
 
+import static org.junit.jupiter.api.Assertions.fail;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 
+import com.microsoft.aad.msal4j.ConfidentialClientApplication;
 import com.microsoft.sqlserver.jdbc.ISQLServerDataSource;
 import com.microsoft.sqlserver.jdbc.SQLServerColumnEncryptionAzureKeyVaultProvider;
 import com.microsoft.sqlserver.jdbc.SQLServerColumnEncryptionJavaKeyStoreProvider;
@@ -58,12 +61,19 @@ public abstract class AbstractTest {
 
     protected static String applicationClientID = null;
     protected static String applicationKey = null;
+    protected static String servicePrincipalCertificateApplicationClientId = null;
     protected static String tenantID;
     protected static String[] keyIDs = null;
 
+    protected static String linkedServer = null;
+    protected static String linkedServerUser = null;
+    protected static String linkedServerPassword = null;
     protected static String[] enclaveServer = null;
     protected static String[] enclaveAttestationUrl = null;
     protected static String[] enclaveAttestationProtocol = null;
+
+    protected static String kerberosServer = null;
+    protected static String kerberosServerPort = null;
 
     protected static String clientCertificate = null;
     protected static String clientKey = null;
@@ -72,13 +82,15 @@ public abstract class AbstractTest {
     protected static String trustStore = "";
     protected static String trustStorePassword = "";
 
+    protected static String serverCertificate = "";
+
     protected static String encrypt = "";
     protected static String trustServerCertificate = "";
 
     protected static String windowsKeyPath = null;
     protected static String javaKeyPath = null;
     protected static String javaKeyAliases = null;
-    protected static SQLServerColumnEncryptionKeyStoreProvider jksProvider = null;
+    protected static SQLServerColumnEncryptionJavaKeyStoreProvider jksProvider = null;
     protected static SQLServerColumnEncryptionAzureKeyVaultProvider akvProvider = null;
     static boolean isKspRegistered = false;
 
@@ -100,6 +112,9 @@ public abstract class AbstractTest {
     protected static Connection connectionAzure = null;
     protected static String connectionString = null;
     protected static String connectionStringNTLM;
+    protected static String connectionStringKerberos;
+
+    protected static ConfidentialClientApplication fedauthClientApp = null;
 
     private static boolean determinedSqlAzureOrSqlServer = false;
     private static boolean determinedSqlOS = false;
@@ -115,6 +130,12 @@ public abstract class AbstractTest {
     private static Properties configProperties = null;
 
     protected static boolean isWindows = System.getProperty("os.name").startsWith("Windows");
+
+    /**
+     * Retries due to server throttling
+     */
+    protected static final int THROTTLE_RETRY_COUNT = 3; // max number of throttling retries
+    protected static final int THROTTLE_RETRY_INTERVAL = 60000; // default throttling retry interval in ms
 
     public static Properties properties = null;
 
@@ -142,6 +163,7 @@ public abstract class AbstractTest {
         applicationClientID = getConfiguredProperty("applicationClientID");
         applicationKey = getConfiguredProperty("applicationKey");
         tenantID = getConfiguredProperty("tenantID");
+        servicePrincipalCertificateApplicationClientId = getConfiguredProperty("servicePrincipalCertificateApplicationClientId");
 
         accessTokenClientId = getConfiguredProperty("accessTokenClientId");
         accessTokenSecret = getConfiguredProperty("accessTokenSecret");
@@ -182,6 +204,13 @@ public abstract class AbstractTest {
 
         clientKeyPassword = getConfiguredProperty("clientKeyPassword", "");
 
+        linkedServer = getConfiguredProperty("linkedServer", null);
+        linkedServerUser = getConfiguredProperty("linkedServerUser", null);
+        linkedServerPassword = getConfiguredProperty("linkedServerPassword", null);
+
+        kerberosServer = getConfiguredProperty("kerberosServer", null);
+        kerberosServerPort = getConfiguredProperty("kerberosServerPort", null);
+
         trustStore = getConfiguredProperty("trustStore", "");
         if (!trustStore.trim().isEmpty()) {
             connectionString = TestUtils.addOrOverrideProperty(connectionString, "trustStore", trustStore);
@@ -191,6 +220,12 @@ public abstract class AbstractTest {
         if (!trustStorePassword.trim().isEmpty()) {
             connectionString = TestUtils.addOrOverrideProperty(connectionString, "trustStorePassword",
                     trustStorePassword);
+        }
+
+        serverCertificate = getConfiguredProperty("serverCertificate", "");
+        if (!serverCertificate.trim().isEmpty()) {
+            connectionString = TestUtils.addOrOverrideProperty(connectionString, "serverCertificate",
+                    serverCertificate);
         }
 
         Map<String, SQLServerColumnEncryptionKeyStoreProvider> map = new HashMap<String, SQLServerColumnEncryptionKeyStoreProvider>();
@@ -233,10 +268,9 @@ public abstract class AbstractTest {
     protected static void setupConnectionString() {
         connectionStringNTLM = connectionString;
 
-        // if these properties are defined then NTLM is desired, modify connection string accordingly
+        // If these properties are defined then NTLM is desired, modify connection string accordingly
         String domain = getConfiguredProperty("domainNTLM");
         String user = getConfiguredProperty("userNTLM");
-        String password = getConfiguredProperty("passwordNTLM");
 
         if (null != domain) {
             connectionStringNTLM = TestUtils.addOrOverrideProperty(connectionStringNTLM, "domain", domain);
@@ -246,14 +280,21 @@ public abstract class AbstractTest {
             connectionStringNTLM = TestUtils.addOrOverrideProperty(connectionStringNTLM, "user", user);
         }
 
-        if (null != password) {
-            connectionStringNTLM = TestUtils.addOrOverrideProperty(connectionStringNTLM, "password", password);
-        }
-
-        if (null != user && null != password) {
+        if (null != user) {
             connectionStringNTLM = TestUtils.addOrOverrideProperty(connectionStringNTLM, "authenticationScheme",
                     "NTLM");
             connectionStringNTLM = TestUtils.addOrOverrideProperty(connectionStringNTLM, "integratedSecurity", "true");
+        }
+
+        if (null != kerberosServer && null != kerberosServerPort) {
+            connectionStringKerberos = "jdbc:sqlserver://" + kerberosServer + ":" + kerberosServerPort + ";";
+            connectionStringKerberos = TestUtils.addOrOverrideProperty(connectionStringKerberos, "authenticationScheme",
+                    "JavaKerberos");
+            connectionStringKerberos = TestUtils.addOrOverrideProperty(connectionStringKerberos, "integratedSecurity",
+                    "true");
+            connectionStringKerberos = TestUtils.addOrOverrideProperty(connectionStringKerberos,
+                    "trustServerCertificate", "true");
+            connectionStringKerberos = TestUtils.addOrOverrideProperty(connectionStringKerberos, "encrypt", "false");
         }
 
         ds = updateDataSource(connectionString, new SQLServerDataSource());
@@ -262,19 +303,23 @@ public abstract class AbstractTest {
     }
 
     protected static void setConnection() throws Exception {
-        setupConnectionString();
+        try {
+            setupConnectionString();
 
-        Assertions.assertNotNull(connectionString, TestResource.getResource("R_ConnectionStringNull"));
-        Class.forName(Constants.MSSQL_JDBC_PACKAGE + ".SQLServerDriver");
-        if (!SQLServerDriver.isRegistered()) {
-            SQLServerDriver.register();
-        }
-        if (null == connection || connection.isClosed()) {
-            connection = getConnection();
-        }
-        isSqlAzureOrAzureDW(connection);
+            Assertions.assertNotNull(connectionString, TestResource.getResource("R_ConnectionStringNull"));
+            Class.forName(Constants.MSSQL_JDBC_PACKAGE + ".SQLServerDriver");
+            if (!SQLServerDriver.isRegistered()) {
+                SQLServerDriver.register();
+            }
+            if (null == connection || connection.isClosed()) {
+                connection = getConnection();
+            }
+            isSqlAzureOrAzureDW(connection);
 
-        checkSqlOS(connection);
+            checkSqlOS(connection);
+        } catch (Exception e) {
+            fail("setConnection failed, connectionString=" + connectionString + "\nException: " + e.getMessage());
+        }
     }
 
     /**
@@ -307,6 +352,9 @@ public abstract class AbstractTest {
                     switch (name.toUpperCase()) {
                         case Constants.INTEGRATED_SECURITY:
                             ds.setIntegratedSecurity(Boolean.parseBoolean(value));
+                            break;
+                        case Constants.SERVER_NAME:
+                            ds.setServerName(value);
                             break;
                         case Constants.USER:
                         case Constants.USER_NAME:

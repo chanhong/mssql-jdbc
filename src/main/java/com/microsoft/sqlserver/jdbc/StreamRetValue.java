@@ -18,8 +18,12 @@ final class StreamRetValue extends StreamPacket {
      */
     private int ordinalOrLength;
 
-    final int getOrdinalOrLength() {
+    int getOrdinalOrLength() {
         return ordinalOrLength;
+    }
+
+    int getStatus() {
+        return status;
     }
 
     /*
@@ -42,7 +46,6 @@ final class StreamRetValue extends StreamPacket {
     }
 
     CryptoMetadata getCryptoMetadata(TDSReader tdsReader) throws SQLServerException {
-        CryptoMetadata cryptoMeta = (new StreamColumns()).readCryptoMetadata(tdsReader);
-        return cryptoMeta;
+        return (new StreamColumns()).readCryptoMetadata(tdsReader);
     }
 }
